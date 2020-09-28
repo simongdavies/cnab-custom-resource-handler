@@ -1,0 +1,201 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "image": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    }
+  },
+  "variables": {
+    "port":8080,
+		"cnab_azure_state_storage_account_name": "[concat('cnabstate',uniqueString(resourceGroup().id))]",
+    "cnab_azure_state_fileshare": "[Guid(variables('cnab_azure_state_storage_account_name'),'fileshare')]",
+		"contributorRoleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+		"msi_name": "cnabcustomrp",
+		"roleAssignmentId": "[guid(concat(resourceGroup().id,variables('msi_name'), 'contributor'))]",
+		"storage_location": "canadacentral"
+  },
+  "resources": [
+    		{
+			"type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+			"name": "[variables('msi_name')]",
+			"apiVersion": "2018-11-30",
+			"location": "[parameters('location')]"
+		},
+		{
+			"type": "Microsoft.Authorization/roleAssignments",
+			"name": "[variables('roleAssignmentId')]",
+			"apiVersion": "2018-09-01-preview",
+			"location": "",
+			"dependsOn": [
+				"[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('msi_name'))]"
+			],
+			"properties": {
+				"roleDefinitionId": "[variables('contributorRoleDefinitionId')]",
+				"principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('msi_name')), '2018-11-30').principalId]",
+				"scope": "[resourceGroup().id]",
+				"principalType": "ServicePrincipal"
+			}
+		},
+		{
+			"type": "Microsoft.Storage/storageAccounts",
+			"name": "[variables('cnab_azure_state_storage_account_name')]",
+			"apiVersion": "2019-06-01",
+			"location": "[variables('storage_location')]",
+			"sku": {
+				"name": "Standard_LRS"
+			},
+			"kind": "StorageV2",
+			"dependsOn": [
+				"[variables('roleAssignmentId')]"
+			],
+			"properties": {
+				"encryption": {
+					"keySource": "Microsoft.Storage",
+					"services": {
+						"file": {
+							"enabled": true
+						}
+					}
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+			"name": "[concat(variables('cnab_azure_state_storage_account_name'), '/default/porter')]",
+			"apiVersion": "2019-06-01",
+			"location": "[variables('storage_location')]",
+			"dependsOn": [
+				"[variables('cnab_azure_state_storage_account_name')]"
+			]
+		},
+		{
+			"type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+			"name": "[concat(variables('cnab_azure_state_storage_account_name'), '/default/', variables('cnab_azure_state_fileshare'))]",
+			"apiVersion": "2019-06-01",
+			"location": "[variables('storage_location')]",
+			"dependsOn": [
+				"[variables('cnab_azure_state_storage_account_name')]"
+			]
+		},
+    		{
+			"type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+			"name": "[concat(variables('cnab_azure_state_storage_account_name'), '/default/', variables('cnab_azure_state_fileshare'),'-caddy')]",
+			"apiVersion": "2019-06-01",
+			"location": "[variables('storage_location')]",
+			"dependsOn": [
+				"[variables('cnab_azure_state_storage_account_name')]"
+			]
+		},
+    {
+      "name": "cnab-custom-resource",
+      "type": "Microsoft.ContainerInstance/containerGroups",
+      "apiVersion": "2019-12-01",
+      "location": "[parameters('location')]",
+      "properties": {
+        "containers": [
+          {
+            "name": "caddy",
+            "properties": {
+              "image": "caddy",
+              "ports": [
+                {
+                  "port": "80",
+                  "protocol": "tcp"
+                },
+                {
+                  "port": "443",
+                  "protocol": "tcp"
+                }
+              ],
+              "environmentVariables": [
+								{
+									"name": "LISTENER_PORT",
+									"value": "[variables('port')]"
+								}
+              ],
+              "command": [
+                  "reverse-proxy", 
+                  "[concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io')]",
+                  "--from",
+                  "--to",
+                  "[concat(':',variables('port'))]"
+              ],
+              "resources": {
+                "requests": {
+                  "cpu": "1.0",
+                  "memoryInGb": "1.5"
+                }
+              },
+              "volumeMounts":[
+              {
+                "name":"caddy-data",
+                "mountPath":"/data"
+              }
+              ]
+            }
+          },
+          {
+            "name": "custom-resource-container",
+            "properties": {
+              "image": "[parameters('image')]",
+              "ports": [
+                {
+                  "port": "[variables('port')]"
+                }
+              ],
+              "environmentVariables": [
+								{
+									"name": "LISTENER_PORT",
+									"value": "[variables('port')]"
+								}
+              ],
+              "resources": {
+                "requests": {
+                  "cpu": "1.0",
+                  "memoryInGb": "1.5"
+                }
+              }
+            }
+          }
+        ],
+        "volumes":  [
+        {
+            "name":"caddy-data",
+            "azureFile": {
+                "sharename": "",
+                "readOnly": false,
+                "storageAccountName": "[variables('cnab_azure_state_storage_account_name')]",
+                "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('cnab_azure_state_storage_account_name')), '2019-04-01').keys[0].value]"
+            }
+        }],
+        "osType": "Linux",
+        "restartPolicy": "Always",
+        "ipAddress": {
+          "dnsLabel":"cnab_azure_state_fileshare",
+          "type": "Public",
+          "ports": [
+            {
+              "protocol": "Tcp",
+              "port": 80
+            },
+            {
+              "protocol": "Tcp",
+              "port": 443
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "containerIPv4Address": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ContainerInstance/containerGroups/', 'cnab-to-arm-template-group')).ipAddress.ip]"
+    }
+  }
+}
