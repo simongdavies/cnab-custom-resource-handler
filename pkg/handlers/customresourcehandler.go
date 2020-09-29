@@ -24,7 +24,7 @@ func NewCustomResourceHandler() chi.Router {
 
 func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Received Request: %s", r.RequestURI)
-	render.DefaultResponder(w, r, fmt.Sprintf("Get Hello World!! from %s", r.RequestURI))
+	render.DefaultResponder(w, r, fmt.Sprintf("Get Hello World!! from %s", r.URL.String()))
 }
 
 func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {

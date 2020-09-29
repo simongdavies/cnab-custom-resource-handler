@@ -29,7 +29,8 @@ LDFLAGS   += -X  github.com/$(ORG)/$(PROJECT)/pkg.Version=$(VERSION) -X github.c
 .PHONY: deploy
 deploy: publish
 	az group create -n  $(GROUP) -l $(LOCATION); \
-	az deployment group create -g $(GROUP) --template-file deploy/azuredeploy.json --param customRPImage=$(IMAGE):$(VERSION)-$(COMMIT) --param debug=true 
+	CADDYFILE=$$(cat deploy/Caddyfile|base64 -w 0); \
+	az deployment group create -g $(GROUP) --template-file deploy/azuredeploy.json --param customRPImage=$(IMAGE):$(VERSION)-$(COMMIT) --param debug=true --param caddyfile=$CADDYFILE 
 
 .PHONY: default
 default: build

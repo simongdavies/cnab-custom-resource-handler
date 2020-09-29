@@ -16,106 +16,109 @@
     "debug": {
       "type": "bool",
       "defaultValue": false
+    },
+    "caddyfile": {
+      "type": "string"
     }
   },
   "variables": {
-    "port":8080,
-		"cnab_azure_state_storage_account_name": "[concat('cnabstate',uniqueString(resourceGroup().id))]",
+    "port": 8080,
+    "cnab_azure_state_storage_account_name": "[concat('cnabstate',uniqueString(resourceGroup().id))]",
     "cnab_azure_state_fileshare": "[Guid(variables('cnab_azure_state_storage_account_name'),'fileshare')]",
-		"contributorRoleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
-		"msi_name": "cnabcustomrp",
-		"roleAssignmentId": "[guid(concat(resourceGroup().id,variables('msi_name'), 'contributor'))]",
-		"storage_location": "canadacentral",
-    "endPointDNSName":"[replace(concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io'),'-','')]"
+    "contributorRoleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+    "msi_name": "cnabcustomrp",
+    "roleAssignmentId": "[guid(concat(resourceGroup().id,variables('msi_name'), 'contributor'))]",
+    "storage_location": "canadacentral",
+    "endPointDNSName": "[replace(concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io'),'-','')]"
   },
   "resources": [
-    		{
-			"type": "Microsoft.ManagedIdentity/userAssignedIdentities",
-			"name": "[variables('msi_name')]",
-			"apiVersion": "2018-11-30",
-			"location": "[parameters('location')]"
-		},
-		{
-			"type": "Microsoft.Authorization/roleAssignments",
-			"name": "[variables('roleAssignmentId')]",
-			"apiVersion": "2018-09-01-preview",
-			"location": "",
-			"dependsOn": [
-				"[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('msi_name'))]"
-			],
-			"properties": {
-				"roleDefinitionId": "[variables('contributorRoleDefinitionId')]",
-				"principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('msi_name')), '2018-11-30').principalId]",
-				"scope": "[resourceGroup().id]",
-				"principalType": "ServicePrincipal"
-			}
-		},
-		{
-			"type": "Microsoft.Storage/storageAccounts",
-			"name": "[variables('cnab_azure_state_storage_account_name')]",
-			"apiVersion": "2019-06-01",
-			"location": "[variables('storage_location')]",
-			"sku": {
-				"name": "Standard_LRS"
-			},
-			"kind": "StorageV2",
-			"dependsOn": [
-				"[variables('roleAssignmentId')]"
-			],
-			"properties": {
-				"encryption": {
-					"keySource": "Microsoft.Storage",
-					"services": {
-						"file": {
-							"enabled": true
-						}
-					}
-				}
-			}
-		},
-		{
-			"type": "Microsoft.Storage/storageAccounts/blobServices/containers",
-			"name": "[concat(variables('cnab_azure_state_storage_account_name'), '/default/porter')]",
-			"apiVersion": "2019-06-01",
-			"location": "[variables('storage_location')]",
-			"dependsOn": [
-				"[variables('cnab_azure_state_storage_account_name')]"
-			]
-		},
-		{
-			"type": "Microsoft.Storage/storageAccounts/fileServices/shares",
-			"name": "[concat(variables('cnab_azure_state_storage_account_name'), '/default/', variables('cnab_azure_state_fileshare'))]",
-			"apiVersion": "2019-06-01",
-			"location": "[variables('storage_location')]",
-			"dependsOn": [
-				"[variables('cnab_azure_state_storage_account_name')]"
-			]
-		},
-    		{
-			"type": "Microsoft.Storage/storageAccounts/fileServices/shares",
-			"name": "[concat(variables('cnab_azure_state_storage_account_name'), '/default/', variables('cnab_azure_state_fileshare'),'-caddy')]",
-			"apiVersion": "2019-06-01",
-			"location": "[variables('storage_location')]",
-			"dependsOn": [
-				"[variables('cnab_azure_state_storage_account_name')]"
-			]
-		},
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "name": "[variables('msi_name')]",
+      "apiVersion": "2018-11-30",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "name": "[variables('roleAssignmentId')]",
+      "apiVersion": "2018-09-01-preview",
+      "location": "",
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('msi_name'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[variables('contributorRoleDefinitionId')]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('msi_name')), '2018-11-30').principalId]",
+        "scope": "[resourceGroup().id]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[variables('cnab_azure_state_storage_account_name')]",
+      "apiVersion": "2019-06-01",
+      "location": "[variables('storage_location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "dependsOn": [
+        "[variables('roleAssignmentId')]"
+      ],
+      "properties": {
+        "encryption": {
+          "keySource": "Microsoft.Storage",
+          "services": {
+            "file": {
+              "enabled": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "name": "[concat(variables('cnab_azure_state_storage_account_name'), '/default/porter')]",
+      "apiVersion": "2019-06-01",
+      "location": "[variables('storage_location')]",
+      "dependsOn": [
+        "[variables('cnab_azure_state_storage_account_name')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "name": "[concat(variables('cnab_azure_state_storage_account_name'), '/default/', variables('cnab_azure_state_fileshare'))]",
+      "apiVersion": "2019-06-01",
+      "location": "[variables('storage_location')]",
+      "dependsOn": [
+        "[variables('cnab_azure_state_storage_account_name')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "name": "[concat(variables('cnab_azure_state_storage_account_name'), '/default/', variables('cnab_azure_state_fileshare'),'-caddy')]",
+      "apiVersion": "2019-06-01",
+      "location": "[variables('storage_location')]",
+      "dependsOn": [
+        "[variables('cnab_azure_state_storage_account_name')]"
+      ]
+    },
     {
       "name": "cnab-custom-resource",
       "type": "Microsoft.ContainerInstance/containerGroups",
       "apiVersion": "2019-12-01",
       "location": "[parameters('location')]",
       "dependsOn": [
-				"[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('cnab_azure_state_storage_account_name'),'default', 'porter')]",
-				"[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', variables('cnab_azure_state_storage_account_name'), 'default', variables('cnab_azure_state_fileshare'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('cnab_azure_state_storage_account_name'),'default', 'porter')]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', variables('cnab_azure_state_storage_account_name'), 'default', variables('cnab_azure_state_fileshare'))]",
         "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', variables('cnab_azure_state_storage_account_name'), 'default', concat(variables('cnab_azure_state_fileshare'),'-caddy'))]"
-			],
-			"identity": {
-				"type": "UserAssigned",
-				"UserAssignedIdentities": {
-					"[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('msi_name'))]": {}
-				}
-			},
+      ],
+      "identity": {
+        "type": "UserAssigned",
+        "UserAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('msi_name'))]": {}
+        }
+      },
       "properties": {
         "containers": [
           {
@@ -133,18 +136,13 @@
                 }
               ],
               "environmentVariables": [
-								{
-									"name": "LISTENER_PORT",
-									"value": "[variables('port')]"
-								}
+                {
+                  "name": "LISTENER_PORT",
+                  "value": "[variables('port')]"
+                }
               ],
               "command": [
-                  "caddy",
-                  "reverse-proxy", 
-                  "--from",
-                  "[variables('endPointDNSName')]",
-                  "--to",
-                  "[concat(':',variables('port'))]"
+                "caddy"
               ],
               "resources": {
                 "requests": {
@@ -152,11 +150,15 @@
                   "memoryInGb": "1.5"
                 }
               },
-              "volumeMounts":[
-              {
-                "name":"caddy-data",
-                "mountPath":"/data"
-              }
+              "volumeMounts": [
+                {
+                  "name": "caddy-data",
+                  "mountPath": "/data"
+                },
+                {
+                  "name": "caddy-file",
+                  "mountPath": "/etc/caddy"
+                }
               ]
             }
           },
@@ -170,28 +172,28 @@
                 }
               ],
               "environmentVariables": [
-								{
-									"name": "LISTENER_PORT",
-									"value": "[variables('port')]"
-								},
                 {
-									"name": "AZURE_STORAGE_ACCOUNT",
-									"value": "[variables('cnab_azure_state_storage_account_name')]"
-								},
+                  "name": "LISTENER_PORT",
+                  "value": "[variables('port')]"
+                },
                 {
-									"name": "AZURE_STORAGE_RESOURCE_GROUP",
-									"value": "[resourceGroup().name]"
-								},
+                  "name": "AZURE_STORAGE_ACCOUNT",
+                  "value": "[variables('cnab_azure_state_storage_account_name')]"
+                },
                 {
-									"name": "AZURE_SUBSCRIPTION_ID",
-									"value": "[subscription().subscriptionId]"
-								},
-                                {
-									"name": "CNAB_BUNDLE_TAG",
-									"value": "[parameters('bundleTag')]"
-								}
+                  "name": "AZURE_STORAGE_RESOURCE_GROUP",
+                  "value": "[resourceGroup().name]"
+                },
+                {
+                  "name": "AZURE_SUBSCRIPTION_ID",
+                  "value": "[subscription().subscriptionId]"
+                },
+                {
+                  "name": "CNAB_BUNDLE_TAG",
+                  "value": "[parameters('bundleTag')]"
+                }
               ],
-              "command":"[if(parameters('debug'),json('[\"/cnabcustomrphandler\",\"--debug\"]'),json('[\"/cnabcustomrphandler\"]'))]",
+              "command": "[if(parameters('debug'),json('[\"/cnabcustomrphandler\",\"--debug\"]'),json('[\"/cnabcustomrphandler\"]'))]",
               "resources": {
                 "requests": {
                   "cpu": "1.0",
@@ -201,20 +203,27 @@
             }
           }
         ],
-        "volumes":  [
-        {
-            "name":"caddy-data",
+        "volumes": [
+          {
+            "name": "caddy-data",
             "azureFile": {
-                "sharename": "[variables('cnab_azure_state_fileshare')]",
-                "readOnly": false,
-                "storageAccountName": "[variables('cnab_azure_state_storage_account_name')]",
-                "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('cnab_azure_state_storage_account_name')), '2019-04-01').keys[0].value]"
+              "sharename": "[variables('cnab_azure_state_fileshare')]",
+              "readOnly": false,
+              "storageAccountName": "[variables('cnab_azure_state_storage_account_name')]",
+              "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('cnab_azure_state_storage_account_name')), '2019-04-01').keys[0].value]"
             }
-        }],
+          },
+          {
+            "name": "caddy-file",
+            "secret": {
+              "Caddyfile": "[parameters('caddyfile')]"
+            }
+          }
+        ],
         "osType": "Linux",
         "restartPolicy": "Always",
         "ipAddress": {
-          "dnsNameLabel":"[replace(variables('cnab_azure_state_fileshare'),'-','')]",
+          "dnsNameLabel": "[replace(variables('cnab_azure_state_fileshare'),'-','')]",
           "type": "Public",
           "ports": [
             {
@@ -235,16 +244,16 @@
       "name": "TestCNABRP",
       "location": "[parameters('location')]",
       "dependsOn": [
-          "cnab-custom-resource"
+        "cnab-custom-resource"
       ],
       "properties": {
-          "resourceTypes": [
-              {
-                  "name": "bundle",
-                  "routingType": "Proxy",
-                  "endpoint": "[concat('https://',variables('endPointDNSName'))]"
-              }
-          ]
+        "resourceTypes": [
+          {
+            "name": "bundle",
+            "routingType": "Proxy",
+            "endpoint": "[concat('https://',variables('endPointDNSName'))]"
+          }
+        ]
       }
     }
   ]

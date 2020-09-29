@@ -1,0 +1,8 @@
+log {
+  output stdout
+  format console
+  level DEBUG
+}
+reverse_proxy {
+  to :8080
+}
