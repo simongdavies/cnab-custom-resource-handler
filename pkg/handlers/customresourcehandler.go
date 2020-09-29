@@ -24,6 +24,10 @@ func NewCustomResourceHandler() chi.Router {
 
 func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	requestPath := r.Header.Get("x-ms-customproviders-requestpath")
+	for k, v := range r.Header {
+		log.Infof("Header:%s Value:%s", k, v)
+	}
+
 	log.Infof("Received Request: %s", requestPath)
 	render.DefaultResponder(w, r, fmt.Sprintf("Get Hello World!! from %s", r.URL.String()))
 }
