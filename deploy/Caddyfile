@@ -1,8 +1,6 @@
-log {
-  output stdout
-  format console
-  level DEBUG
-}
-reverse_proxy {
-  to :8080
+e6fef4654ba150398f5eccc17c2c6e20.northeurope.azurecontainer.io {
+  log {
+      output file /var/log/access.log
+      format console
+  }
 }

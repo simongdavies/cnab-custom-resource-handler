@@ -142,7 +142,12 @@
                 }
               ],
               "command": [
-                "caddy"
+                "caddy",
+                "reverse-proxy",
+                "--from",
+                "[replace(concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io'),'-','')]",
+                "--to",
+                "[concat(':',variables('port'))]"
               ],
               "resources": {
                 "requests": {
