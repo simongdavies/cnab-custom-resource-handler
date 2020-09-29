@@ -110,7 +110,7 @@ func getstorageAccountKey(authorizer autorest.Authorizer, subscriptionID string,
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	log.Debugf("Attempting to get storage account key for storage account %s in resource group %s in subscription %s", storageAccountName, resourceGroupName, subscriptionID)
-	result, err := client.ListKeys(ctx, resourceGroupName, storageAccountName, storage.Kerb)
+	result, err := client.ListKeys(ctx, resourceGroupName, storageAccountName, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get storage account keys: %s", err)
 	}
