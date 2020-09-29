@@ -23,7 +23,6 @@ func NewCustomResourceHandler() chi.Router {
 
 func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Received Request: %s", r.RequestURI)
-
 	_, _ = w.Write([]byte("Get Hello World!!"))
 }
 

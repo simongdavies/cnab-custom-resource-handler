@@ -100,6 +100,17 @@
       "type": "Microsoft.ContainerInstance/containerGroups",
       "apiVersion": "2019-12-01",
       "location": "[parameters('location')]",
+      "dependsOn": [
+				"[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('cnab_azure_state_storage_account_name'),'default', 'porter')]",
+				"[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', variables('cnab_azure_state_storage_account_name'), 'default', variables('cnab_azure_state_fileshare'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', variables('cnab_azure_state_storage_account_name'), 'default', concat(variables('cnab_azure_state_fileshare'),'-caddy'))]"
+			],
+			"identity": {
+				"type": "UserAssigned",
+				"UserAssignedIdentities": {
+					"[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('msi_name'))]": {}
+				}
+			},
       "properties": {
         "containers": [
           {
@@ -171,7 +182,7 @@
 									"value": "[subscription().subscriptionId]"
 								}
               ],
-              "command":"[if(parameters('debug'),json('[\"--debug\"]'),json('null'))]",
+              "command":"[if(parameters('debug'),json('[\"/cnabcustomrphandler\",\"--debug\"]'),json('[\"/cnabcustomrphandler\"]'))]",
               "resources": {
                 "requests": {
                   "cpu": "1.0",

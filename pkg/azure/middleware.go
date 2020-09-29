@@ -21,9 +21,9 @@ func Login(next http.Handler) http.Handler {
 		var err error
 		if loginInfo, err = LoginToAzure(); err != nil {
 			log.Infof("Failed to Login: %v", err)
-			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to Loginto Azure error: %v", err)))
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to Loginto Azure error: %v for request URI %s", err, r.RequestURI)))
 		}
-		log.Debug("Logged in to Azure")
+		log.Debugf("Logged in to Azure for request URI %s", r.RequestURI)
 		ctx := context.WithValue(r.Context(), AzureLoginContext, loginInfo)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

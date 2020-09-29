@@ -34,7 +34,7 @@ var rootCmd = &cobra.Command{
 	Use:   "cnabcustomrphandler",
 	Short: "Launches a web server that provides ARM RPC compliant CRUD endpoints for a CNAB Bundle ",
 	Long:  `Launches a web server that provides ARM RPC compliant CRUD endpoints for a CNAB Bundle which can be used as an ARM Custom resource provider implementation for CNAB `,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
 		if debug {
 			log.SetLevel(log.DebugLevel)
@@ -44,24 +44,29 @@ var rootCmd = &cobra.Command{
 			port = "8080"
 		}
 		if err := loadSettings(); err != nil {
-			log.Fatalf("Error loading settings %v", err)
+			log.Errorf("Error loading settings %v", err)
+			return err
 		}
 		if err := setStorageAccountConnectionString(); err != nil {
-			log.Fatalf("Error setting connection string %v", err)
+			log.Errorf("Error setting connection string %v", err)
+			return err
 		}
+		log.Debug("Creating Router")
 		router := chi.NewRouter()
 		router.Use(middleware.RequestID)
 		router.Use(middleware.RealIP)
 		router.Use(middleware.Logger)
 		router.Use(middleware.Timeout(60 * time.Second))
 		router.Use(middleware.Recoverer)
+		log.Debug("Creating Handler")
 		router.Handle("/", handlers.NewCustomResourceHandler())
 		log.Infof("Starting to listen on port  %s", port)
 		err := http.ListenAndServe(fmt.Sprintf(":%s", port), router)
 		if err != nil {
-			log.Fatalf("Error running HTTP Server %v", err)
+			log.Errorf("Error running HTTP Server %v", err)
+			return err
 		}
-
+		return nil
 	},
 }
 
