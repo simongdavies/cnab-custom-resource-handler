@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-04-01/storage"
 	"github.com/Azure/go-autorest/autorest"
+	"github.com/docker/distribution/reference"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	az "github.com/simongdavies/cnab-custom-resource-handler/pkg/azure"
@@ -19,10 +21,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var settings = map[string]string{
+var requiredSettings = map[string]string{
 	"StorageAccountName":   "AZURE_STORAGE_ACCOUNT",
 	"StorageResourceGroup": "AZURE_STORAGE_RESOURCE_GROUP",
 	"SusbcriptionId":       "AZURE_SUBSCRIPTION_ID",
+	"BundleTag":            "CNAB_BUNDLE_TAG",
+}
+
+var optionalSettings = map[string]interface{}{
+	"AllowInsecureRegistry": "CNAB_BUNDLE_INSECURE_REGISTRY",
+	"ForcePull":             "CNAB_BUNDLE_FORCE_PULL",
 }
 
 const (
@@ -79,12 +87,20 @@ func init() {
 }
 
 func loadSettings() error {
-	for k, v := range settings {
+	for k, v := range requiredSettings {
 		val := os.Getenv(v)
 		if len(val) == 0 {
 			return fmt.Errorf("Environment Variable %s is not set", v)
 		}
-		settings[k] = strings.TrimSpace(val)
+		requiredSettings[k] = strings.TrimSpace(val)
+	}
+	for k, v := range optionalSettings {
+		val := os.Getenv(v.(string))
+		if boolVal, err := strconv.ParseBool(val); err != nil {
+			optionalSettings[k] = boolVal
+		} else {
+			optionalSettings[k] = false
+		}
 	}
 	return nil
 }
@@ -96,12 +112,12 @@ func setStorageAccountConnectionString() error {
 	if loginInfo, err = az.LoginToAzure(); err != nil {
 		return fmt.Errorf("Login to Azure Failed: %v", err)
 	}
-	result, err := getstorageAccountKey(loginInfo.Authorizer, settings["SusbcriptionId"], settings["StorageResourceGroup"], settings["StorageAccountName"])
+	result, err := getstorageAccountKey(loginInfo.Authorizer, requiredSettings["SusbcriptionId"], requiredSettings["StorageResourceGroup"], requiredSettings["StorageAccountName"])
 	if err != nil {
 		return fmt.Errorf("Get Storage Account Key Failed: %v", err)
 	}
 
-	os.Setenv(AzureStorageConnectionString, fmt.Sprintf("AccountName=%s;AccountKey=%s", settings["StorageAccountName"], *(((*result.Keys)[0]).Value)))
+	os.Setenv(AzureStorageConnectionString, fmt.Sprintf("AccountName=%s;AccountKey=%s", requiredSettings["StorageAccountName"], *(((*result.Keys)[0]).Value)))
 	return nil
 }
 
@@ -115,4 +131,13 @@ func getstorageAccountKey(authorizer autorest.Authorizer, subscriptionID string,
 		return nil, fmt.Errorf("failed to get storage account keys: %s", err)
 	}
 	return &result, nil
+}
+
+func validateBundleTag(tag string) error {
+	_, err := reference.ParseNormalizedNamed(tag)
+	if err != nil {
+		return fmt.Errorf("Invalid bundle tag format %s, expected REGISTRY/name:tag %w", tag, err)
+	}
+
+	return nil
 }

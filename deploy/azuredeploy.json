@@ -2,12 +2,15 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "image": {
+    "customRPImage": {
       "type": "string"
     },
     "location": {
       "type": "string",
       "defaultValue": "[resourceGroup().location]"
+    },
+    "bundle_tag": {
+      "type": "string"
     },
     "debug": {
       "type": "bool",
@@ -21,7 +24,8 @@
 		"contributorRoleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
 		"msi_name": "cnabcustomrp",
 		"roleAssignmentId": "[guid(concat(resourceGroup().id,variables('msi_name'), 'contributor'))]",
-		"storage_location": "canadacentral"
+		"storage_location": "canadacentral",
+    "endPointDNSName":"[replace(concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io'),'-','')]"
   },
   "resources": [
     		{
@@ -137,7 +141,7 @@
                   "caddy",
                   "reverse-proxy", 
                   "--from",
-                  "[replace(concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io'),'-','')]",
+                  "[variables('endPointDNSName')]",
                   "--to",
                   "[concat(':',variables('port'))]"
               ],
@@ -158,7 +162,7 @@
           {
             "name": "custom-resource-container",
             "properties": {
-              "image": "[parameters('image')]",
+              "image": "[parameters('customRPImage')]",
               "ports": [
                 {
                   "port": "[variables('port')]"
@@ -180,6 +184,10 @@
                 {
 									"name": "AZURE_SUBSCRIPTION_ID",
 									"value": "[subscription().subscriptionId]"
+								},
+                                {
+									"name": "CNAB_BUNDLE_TAG",
+									"value": "[parameters('bundle_tag')]"
 								}
               ],
               "command":"[if(parameters('debug'),json('[\"/cnabcustomrphandler\",\"--debug\"]'),json('[\"/cnabcustomrphandler\"]'))]",
@@ -218,6 +226,24 @@
             }
           ]
         }
+      }
+    },
+    {
+      "type": "Microsoft.CustomProviders/resourceProviders",
+      "apiVersion": "2018-09-01-preview",
+      "name": "TestCNABRP",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+          "cnab-custom-resource"
+      ],
+      "properties": {
+          "resourceTypes": [
+              {
+                  "name": "bundle",
+                  "routingType": "Proxy",
+                  "endpoint": "[concat('https://',variables('endPointDNSName'))]"
+              }
+          ]
       }
     }
   ]

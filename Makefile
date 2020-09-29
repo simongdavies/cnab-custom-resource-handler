@@ -9,6 +9,7 @@ REGISTRY 				:= cnabquickstarts
 IMAGE           := $(REGISTRY).azurecr.io/$(FILENAME)
 GROUP 					:= custom_resource_test
 LOCATION				:= northeurope
+TEST_BUNDLE_TAG :=cnabquickstarts.azurecr.io/porter/sql-server-always-on-kubernetes/bundle:0.0.1
 GO = GO111MODULE=on go
 COMMIT ?= $(shell git rev-parse --short HEAD)
 
@@ -29,7 +30,7 @@ LDFLAGS   += -X  github.com/$(ORG)/$(PROJECT)/pkg.Version=$(VERSION) -X github.c
 .PHONY: deploy
 deploy: publish
 	az group create -n  $(GROUP) -l $(LOCATION); \
-	az deployment group create -g $(GROUP) --template-file deploy/azuredeploy.json --param image=$(IMAGE):$(VERSION)-$(COMMIT) --param debug=true
+	az deployment group create -g $(GROUP) --template-file deploy/azuredeploy.json --param customRPImage=$(IMAGE):$(VERSION)-$(COMMIT) --param debug=true --param bundle_tag $$TEST_BUNDLE_TAG 
 
 .PHONY: default
 default: build
