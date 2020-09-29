@@ -8,6 +8,10 @@
     "location": {
       "type": "string",
       "defaultValue": "[resourceGroup().location]"
+    },
+    "debug": {
+      "type": "bool",
+      "defaultValue": false
     }
   },
   "variables": {
@@ -119,9 +123,10 @@
 								}
               ],
               "command": [
+                  "caddy",
                   "reverse-proxy", 
-                  "[concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io')]",
                   "--from",
+                  "[replace(concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io'),'-','')]",
                   "--to",
                   "[concat(':',variables('port'))]"
               ],
@@ -152,8 +157,21 @@
 								{
 									"name": "LISTENER_PORT",
 									"value": "[variables('port')]"
+								},
+                {
+									"name": "AZURE_STORAGE_ACCOUNT",
+									"value": "[variables('cnab_azure_state_storage_account_name')]"
+								},
+                {
+									"name": "AZURE_STORAGE_RESOURCE_GROUP",
+									"value": "[resourceGroup().name]"
+								},
+                {
+									"name": "AZURE_SUBSCRIPTION_ID",
+									"value": "[subscription().subscriptionId]"
 								}
               ],
+              "command":"[if(parameters('debug'),json('[\"--debug\"]'),json('null'))]",
               "resources": {
                 "requests": {
                   "cpu": "1.0",
@@ -167,7 +185,7 @@
         {
             "name":"caddy-data",
             "azureFile": {
-                "sharename": "",
+                "sharename": "[variables('cnab_azure_state_fileshare')]",
                 "readOnly": false,
                 "storageAccountName": "[variables('cnab_azure_state_storage_account_name')]",
                 "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('cnab_azure_state_storage_account_name')), '2019-04-01').keys[0].value]"
@@ -176,7 +194,7 @@
         "osType": "Linux",
         "restartPolicy": "Always",
         "ipAddress": {
-          "dnsLabel":"cnab_azure_state_fileshare",
+          "dnsNameLabel":"[replace(variables('cnab_azure_state_fileshare'),'-','')]",
           "type": "Public",
           "ports": [
             {
@@ -191,11 +209,5 @@
         }
       }
     }
-  ],
-  "outputs": {
-    "containerIPv4Address": {
-      "type": "string",
-      "value": "[reference(resourceId('Microsoft.ContainerInstance/containerGroups/', 'cnab-to-arm-template-group')).ipAddress.ip]"
-    }
-  }
+  ]
 }

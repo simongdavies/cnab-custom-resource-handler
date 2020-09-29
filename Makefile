@@ -22,14 +22,14 @@ else
 	CHECK  ?= which
 endif
 
-GIT_TAG   := $(shell git describe --tags --always)
+GIT_TAG   := $(shell git describe --tags --always )
 VERSION   ?= ${GIT_TAG}
 LDFLAGS   += -X  github.com/$(ORG)/$(PROJECT)/pkg.Version=$(VERSION) -X github.com/$(ORG)/$(PROJECT)/pkg.Commit=$(COMMIT)
 
 .PHONY: deploy
 deploy: publish
 	az group create -n  $(GROUP) -l $(LOCATION); \
-	az deployment group create -g $(GROUP) --template-file deploy/azuredeploy.json --param image=$(IMAGE):$(VERSION)-$(COMMIT) 
+	az deployment group create -g $(GROUP) --template-file deploy/azuredeploy.json --param image=$(IMAGE):$(VERSION)-$(COMMIT) --param debug=true
 
 .PHONY: default
 default: build

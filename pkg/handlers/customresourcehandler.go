@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
+	"github.com/simongdavies/cnab-custom-resource-handler/pkg/azure"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -12,6 +13,7 @@ func NewCustomResourceHandler() chi.Router {
 
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
+	r.Use(azure.Login)
 	r.Get("/*", getCustomResourceHandler)
 	r.Put("/*", putCustomResourceHandler)
 	r.Post("/*", postCustomResourceHandler)
@@ -21,6 +23,7 @@ func NewCustomResourceHandler() chi.Router {
 
 func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Received Request: %s", r.RequestURI)
+
 	_, _ = w.Write([]byte("Get Hello World!!"))
 }
 
