@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM ubuntu:18.04 as base
 ENV PORTER_HOME="/root/.porter"
 ENV	PORTER_VERSION=latest
 ENV CNAB_AZURE_HOME="/root/.cnab-azure-driver"
@@ -13,8 +13,13 @@ RUN apt update; \
 		mkdir -p ${CNAB_AZURE_HOME}; \
 		curl -sSLo  ${CNAB_AZURE_HOME}/cnab-azure ${DOWNLOAD_LOCATION}; \
 		chmod +x ${CNAB_AZURE_HOME}/cnab-azure;
+FROM ubuntu:18.04 
 ENV PORTER_HOME="/root/.porter"
 ENV CNAB_AZURE_HOME="/root/.cnab-azure-driver"
+RUN apt update; \
+    apt install openssl -y; 
+COPY --from=base ${PORTER_HOME}/* ${PORTER_HOME}/
+COPY --from=base ${CNAB_AZURE_HOME}/* ${CNAB_AZURE_HOME}/
 COPY /setup/config.toml ${PORTER_HOME}
 ENV PATH=${PORTER_HOME}:${CNAB_AZURE_HOME}:${PATH}
 COPY /bin/cnabcustomrphandler /
