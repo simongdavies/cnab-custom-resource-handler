@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi"
@@ -23,20 +24,20 @@ func NewCustomResourceHandler() chi.Router {
 
 func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Received Request: %s", r.RequestURI)
-	_, _ = w.Write([]byte("Get Hello World!!"))
+	render.DefaultResponder(w, r, fmt.Sprintf("Get Hello World!! from %s", r.RequestURI))
 }
 
 func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Received Request: %s", r.RequestURI)
-	_, _ = w.Write([]byte("Put Hello World!!"))
+	render.DefaultResponder(w, r, fmt.Sprintf("Put Hello World!! from %s", r.RequestURI))
 }
 
 func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Received Request: %s", r.RequestURI)
-	_, _ = w.Write([]byte("Post Hello World!!"))
+	render.DefaultResponder(w, r, fmt.Sprintf("Post Hello World!! from %s", r.RequestURI))
 }
 
 func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Received Request: %s", r.RequestURI)
-	_, _ = w.Write([]byte("Delete Hello World!!"))
+	render.DefaultResponder(w, r, fmt.Sprintf("Delete Hello World!! from %s", r.RequestURI))
 }

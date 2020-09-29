@@ -59,6 +59,11 @@ var rootCmd = &cobra.Command{
 			log.Errorf("Error setting connection string %v", err)
 			return err
 		}
+		if err := validateBundleTag(requiredSettings["BundleTag"]); err != nil {
+			log.Errorf("Error validating bundle tag %v", err)
+			return err
+		}
+
 		log.Debug("Creating Router")
 		router := chi.NewRouter()
 		router.Use(middleware.RequestID)
@@ -67,7 +72,7 @@ var rootCmd = &cobra.Command{
 		router.Use(middleware.Timeout(60 * time.Second))
 		router.Use(middleware.Recoverer)
 		log.Debug("Creating Handler")
-		router.Handle("/", handlers.NewCustomResourceHandler())
+		router.Handle("/*", handlers.NewCustomResourceHandler())
 		log.Infof("Starting to listen on port  %s", port)
 		err := http.ListenAndServe(fmt.Sprintf(":%s", port), router)
 		if err != nil {
@@ -135,9 +140,10 @@ func getstorageAccountKey(authorizer autorest.Authorizer, subscriptionID string,
 
 func validateBundleTag(tag string) error {
 	_, err := reference.ParseNormalizedNamed(tag)
+	log.Debugf("Attempting to validate bundle tag  %s", tag)
 	if err != nil {
 		return fmt.Errorf("Invalid bundle tag format %s, expected REGISTRY/name:tag %w", tag, err)
 	}
-
+	log.Debugf("Successfully validated bundle tag  %s", tag)
 	return nil
 }
