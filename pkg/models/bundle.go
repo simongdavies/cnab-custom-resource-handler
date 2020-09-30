@@ -22,10 +22,10 @@ type NameVal struct {
 
 // BundleCommandProperties defines the bundle and the properties to be used for the command
 type BundleCommandProperties struct {
-	Credentials []NameVal `json:"credentials"`
-	Parameters  []NameVal `json:"parameters"`
-	*porter.BundlePullOptions
-	RequestPath string
+	Credentials               map[string]interface{} `json:"credentials"`
+	Parameters                []NameVal              `json:"parameters"`
+	*porter.BundlePullOptions `json:"-"`
+	RequestPath               string `json:"-"`
 }
 
 func BundleCtx(next http.Handler) http.Handler {
