@@ -45,7 +45,7 @@ func BundleCtx(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), BundleContext, &payload)
+		ctx := context.WithValue(r.Context(), BundleContext, payload)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
