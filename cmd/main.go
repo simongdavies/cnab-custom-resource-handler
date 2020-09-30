@@ -9,12 +9,14 @@ import (
 	"strings"
 	"time"
 
+	"get.porter.sh/porter/pkg/porter"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-04-01/storage"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/docker/distribution/reference"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	az "github.com/simongdavies/cnab-custom-resource-handler/pkg/azure"
+	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/handlers"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
 	log "github.com/sirupsen/logrus"
@@ -59,9 +61,23 @@ var rootCmd = &cobra.Command{
 			log.Errorf("Error setting connection string %v", err)
 			return err
 		}
-		if err := validateBundleTag(requiredSettings["BundleTag"]); err != nil {
+		ref, err := validateBundleTag(requiredSettings["BundleTag"])
+		if err != nil {
 			log.Errorf("Error validating bundle tag %v", err)
 			return err
+		}
+
+		// TODO need to handle digests and versioning correctly
+		if _, ok := ref.(reference.Tagged); !ok {
+			if _, ok := ref.(reference.Digested); !ok {
+				requiredSettings["BundleTag"] += ":latest"
+			}
+		}
+
+		common.BundlePullOptions = &porter.BundlePullOptions{
+			Tag:              requiredSettings["BundleTag"],
+			Force:            optionalSettings["ForcePull"].(bool),
+			InsecureRegistry: optionalSettings["AllowInsecureRegistry"].(bool),
 		}
 
 		log.Debug("Creating Router")
@@ -74,7 +90,7 @@ var rootCmd = &cobra.Command{
 		log.Debug("Creating Handler")
 		router.Handle("/*", handlers.NewCustomResourceHandler())
 		log.Infof("Starting to listen on port  %s", port)
-		err := http.ListenAndServe(fmt.Sprintf(":%s", port), router)
+		err = http.ListenAndServe(fmt.Sprintf(":%s", port), router)
 		if err != nil {
 			log.Errorf("Error running HTTP Server %v", err)
 			return err
@@ -84,7 +100,9 @@ var rootCmd = &cobra.Command{
 }
 
 func main() {
-	rootCmd.Execute()
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }
 
 func init() {
@@ -138,12 +156,12 @@ func getstorageAccountKey(authorizer autorest.Authorizer, subscriptionID string,
 	return &result, nil
 }
 
-func validateBundleTag(tag string) error {
-	_, err := reference.ParseNormalizedNamed(tag)
+func validateBundleTag(tag string) (reference.Named, error) {
+	ref, err := reference.ParseNormalizedNamed(tag)
 	log.Debugf("Attempting to validate bundle tag  %s", tag)
 	if err != nil {
-		return fmt.Errorf("Invalid bundle tag format %s, expected REGISTRY/name:tag %w", tag, err)
+		return nil, fmt.Errorf("Invalid bundle tag format %s, expected REGISTRY/name:tag %w", tag, err)
 	}
 	log.Debugf("Successfully validated bundle tag  %s", tag)
-	return nil
+	return ref, nil
 }

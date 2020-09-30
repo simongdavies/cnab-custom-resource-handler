@@ -17,7 +17,7 @@
       "type": "bool",
       "defaultValue": false
     },
-    "caddyfile": {
+    "caddyconfig": {
       "type": "string"
     }
   },
@@ -143,11 +143,9 @@
               ],
               "command": [
                 "caddy",
-                "reverse-proxy",
-                "--from",
-                "[replace(concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io'),'-','')]",
-                "--to",
-                "[concat(':',variables('port'))]"
+                "run",
+                "--config",
+                "/test/Caddyfile"
               ],
               "resources": {
                 "requests": {
@@ -162,7 +160,7 @@
                 },
                 {
                   "name": "caddy-file",
-                  "mountPath": "/etc/caddy"
+                  "mountPath": "/test"
                 }
               ]
             }
@@ -221,7 +219,7 @@
           {
             "name": "caddy-file",
             "secret": {
-              "Caddyfile": "[parameters('caddyfile')]"
+              "Caddyfile": "[parameters('caddyconfig')]"
             }
           }
         ],

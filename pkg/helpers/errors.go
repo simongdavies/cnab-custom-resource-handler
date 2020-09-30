@@ -29,3 +29,23 @@ func ErrorInternalServerErrorFromError(err error) render.Renderer {
 		},
 	}
 }
+
+func ErrorInvalidRequestFromError(err error) render.Renderer {
+	return &ErrorResponse{
+		&RequestError{
+			HTTPStatusCode: 400,
+			Status:         "Invalid Request",
+			Message:        err.Error(),
+		},
+	}
+}
+
+func ErrorInvalidRequest(message string) render.Renderer {
+	return &ErrorResponse{
+		&RequestError{
+			HTTPStatusCode: 400,
+			Status:         "Invalid Request",
+			Message:        message,
+		},
+	}
+}
