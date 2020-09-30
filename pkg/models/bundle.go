@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -35,29 +36,15 @@ type CNABRP struct {
 func BundleCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		bundleCommandProperties := &BundleCommandProperties{}
-		if err := render.Bind(r, bundleCommandProperties); err != nil {
+		payload := &CNABRP{
+			Properties: &BundleCommandProperties{},
+		}
+
+		if err := render.Bind(r, payload); err != nil {
 			render.Render(w, r, helpers.ErrorInvalidRequestFromError(err))
 			return
 		}
-		requestPath := r.Header.Get("x-ms-customproviders-requestpath")
-		if len(requestPath) == 0 {
-			_ = render.Render(w, r, helpers.ErrorInvalidRequest("x-ms-customproviders-requestpath missing from request"))
-		}
 
-		// TODO update to use library
-
-		resourceIDParts := strings.Split(requestPath, "/")
-		resourceName := resourceIDParts[len(resourceIDParts)-1]
-		resourceType := fmt.Sprintf("%s/%s", resourceIDParts[len(resourceIDParts)-3], resourceIDParts[len(resourceIDParts)-2])
-
-		payload := CNABRP{
-			Id:         requestPath,
-			Name:       resourceName,
-			Type:       resourceType,
-			Properties: bundleCommandProperties,
-		}
-		bundleCommandProperties.RequestPath = requestPath
 		ctx := context.WithValue(r.Context(), BundleContext, &payload)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -69,6 +56,22 @@ func (bundleCommandProperties *BundleCommandProperties) Bind(r *http.Request) er
 }
 
 func (bundleCommandProperties *BundleCommandProperties) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+func (payload *CNABRP) Bind(r *http.Request) error {
+	requestPath := r.Header.Get("x-ms-customproviders-requestpath")
+	if len(requestPath) == 0 {
+		return errors.New("x-ms-customproviders-requestpath missing from request")
+	}
+
+	// TODO update to use library
+	payload.Id = requestPath
+	resourceIDParts := strings.Split(requestPath, "/")
+	payload.Name = resourceIDParts[len(resourceIDParts)-1]
+	payload.Type = fmt.Sprintf("%s/%s", resourceIDParts[len(resourceIDParts)-3], resourceIDParts[len(resourceIDParts)-2])
+	payload.Properties.RequestPath = requestPath
+
 	return nil
 }
 
