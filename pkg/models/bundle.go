@@ -15,10 +15,15 @@ type ContextKey string
 
 const BundleContext ContextKey = "bundle"
 
+type NameVal struct {
+	Name  string      `json:"name"`
+	Value interface{} `json:"value"`
+}
+
 // BundleCommandProperties defines the bundle and the properties to be used for the command
 type BundleCommandProperties struct {
-	Credentials map[string]string `json:"credentials"`
-	Parameters  map[string]string `json:"parameters"`
+	Credentials []NameVal `json:"credentials"`
+	Parameters  []NameVal `json:"parameters"`
 	*porter.BundlePullOptions
 	RequestPath string
 }
