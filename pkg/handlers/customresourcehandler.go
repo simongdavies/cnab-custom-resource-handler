@@ -17,7 +17,7 @@ func NewCustomResourceHandler() chi.Router {
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
 	r.Use(azure.Login)
-	r.Use()
+	r.Use(models.BundleCtx)
 	r.Get("/*", getCustomResourceHandler)
 	r.Put("/*", putCustomResourceHandler)
 	r.Post("/*", postCustomResourceHandler)
