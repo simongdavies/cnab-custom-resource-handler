@@ -13,6 +13,10 @@
       "type": "string",
       "defaultValue": "cnabquickstarts.azurecr.io/porter/sql-server-always-on-kubernetes/bundle"
     },
+    "rpName": {
+      "type": "string",
+      "defaultValue": "sqlServerAlwaysOn"
+    },
     "debug": {
       "type": "bool",
       "defaultValue": false
@@ -143,9 +147,11 @@
               ],
               "command": [
                 "caddy",
-                "run",
-                "--config",
-                "/test/Caddyfile"
+                  "reverse-proxy", 
+                  "--from",
+                  "[replace(concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io'),'-','')]",
+                  "--to",
+                  "[concat(':',variables('port'))]"
               ],
               "resources": {
                 "requests": {
@@ -160,7 +166,7 @@
                 },
                 {
                   "name": "caddy-file",
-                  "mountPath": "/test"
+                  "mountPath": "/etc/caddy"
                 }
               ]
             }
@@ -256,7 +262,7 @@
     {
       "type": "Microsoft.CustomProviders/resourceProviders",
       "apiVersion": "2018-09-01-preview",
-      "name": "SqlServerAlwaysOn",
+      "name": "[parameters('rpName')]",
       "location": "[parameters('location')]",
       "dependsOn": [
         "cnab-custom-resource"

@@ -1,13 +1,3 @@
 {
   debug
 }
-e6fef4654ba150398f5eccc17c2c6e20.northeurope.azurecontainer.io {
-  log {
-      output stdout
-      format console
-      level debug
-  }
-  reverse_proxy {
-       to :8080
-  }
-}
