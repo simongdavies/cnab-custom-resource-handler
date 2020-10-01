@@ -7,8 +7,8 @@ LDFLAGS         := -w -s
 TESTFLAGS       := -v
 REGISTRY 				:= cnabquickstarts
 IMAGE           := $(REGISTRY).azurecr.io/$(FILENAME)
-GROUP 					:= custom_resource_test1
-LOCATION				:= westeurope
+GROUP 					:= custom_resource_test
+LOCATION				:= northeurope
 GO = GO111MODULE=on go
 COMMIT ?= $(shell git rev-parse --short HEAD)
 

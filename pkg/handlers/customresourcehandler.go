@@ -213,7 +213,8 @@ func executePorterCommand(args []string) ([]byte, error) {
 	out, err := exec.Command("porter", args...).CombinedOutput()
 
 	if err != nil {
-		return nil, fmt.Errorf("Porter command failed: %v", err)
+		log.Debugf("Command failed Error:%v Output: %s", err, string(out))
+		return out, fmt.Errorf("Porter command failed: %v", err)
 	}
 	return out, nil
 }
@@ -225,7 +226,7 @@ func getInstallationName(requestPath string) string {
 
 func checkIfInstallationExists(name string) (bool, error) {
 	args := []string{}
-	args = append(args, " installations", "show", name)
+	args = append(args, "installations", "show", name)
 	if out, err := executePorterCommand(args); err != nil {
 		if strings.Contains(strings.ToLower(string(out)), "installation does not exist") {
 			return false, nil
