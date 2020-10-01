@@ -180,20 +180,32 @@
                   "value": "[variables('port')]"
                 },
                 {
-                  "name": "AZURE_STORAGE_ACCOUNT",
+                  "name": "CNAB_AZURE_STATE_STORAGE_ACCOUNT_NAME",
                   "value": "[variables('cnab_azure_state_storage_account_name')]"
                 },
                 {
-                  "name": "AZURE_STORAGE_RESOURCE_GROUP",
+                  "name": "CNAB_AZURE_STORAGE_RESOURCE_GROUP",
                   "value": "[resourceGroup().name]"
                 },
                 {
-                  "name": "AZURE_SUBSCRIPTION_ID",
+                  "name": "CNAB_AZURE_SUBSCRIPTION_ID",
                   "value": "[subscription().subscriptionId]"
                 },
                 {
                   "name": "CNAB_BUNDLE_TAG",
                   "value": "[parameters('bundleTag')]"
+                },
+                {
+                  "name": "CNAB_AZURE_VERBOSE",
+                  "value": "[parameters('debug')]"
+                },
+                {
+                  "name": "CNAB_AZURE_MSI_TYPE",
+                  "value": "user"
+                },
+                {
+                  "name": "CNAB_AZURE_USER_MSI_RESOURCE_ID",
+                  "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('msi_name'))]"
                 }
               ],
               "command": "[if(parameters('debug'),json('[\"/cnabcustomrphandler\",\"--debug\"]'),json('[\"/cnabcustomrphandler\"]'))]",

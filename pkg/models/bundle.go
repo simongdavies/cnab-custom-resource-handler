@@ -26,7 +26,11 @@ type BundleCommandProperties struct {
 	RequestPath               string `json:"-"`
 }
 
-type CNABRP struct {
+type BundleCommandOutputs struct {
+	Outputs map[string]interface{} `json:"outputs,omitempty"`
+}
+
+type BundleRP struct {
 	Id         string                   `json:"id"`
 	Name       string                   `json:"name"`
 	Type       string                   `json:"type"`
@@ -36,7 +40,7 @@ type CNABRP struct {
 func BundleCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		payload := &CNABRP{
+		payload := &BundleRP{
 			Properties: &BundleCommandProperties{},
 		}
 
@@ -59,7 +63,7 @@ func (bundleCommandProperties *BundleCommandProperties) Render(w http.ResponseWr
 	return nil
 }
 
-func (payload *CNABRP) Bind(r *http.Request) error {
+func (payload *BundleRP) Bind(r *http.Request) error {
 	requestPath := r.Header.Get("x-ms-customproviders-requestpath")
 	if len(requestPath) == 0 {
 		return errors.New("x-ms-customproviders-requestpath missing from request")
@@ -75,6 +79,6 @@ func (payload *CNABRP) Bind(r *http.Request) error {
 	return nil
 }
 
-func (payload *CNABRP) Render(w http.ResponseWriter, r *http.Request) error {
+func (payload *BundleRP) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }

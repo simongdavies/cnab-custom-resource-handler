@@ -24,9 +24,9 @@ import (
 )
 
 var requiredSettings = map[string]string{
-	"StorageAccountName":   "AZURE_STORAGE_ACCOUNT",
-	"StorageResourceGroup": "AZURE_STORAGE_RESOURCE_GROUP",
-	"SusbcriptionId":       "AZURE_SUBSCRIPTION_ID",
+	"StorageAccountName":   "CNAB_AZURE_STATE_STORAGE_ACCOUNT_NAME",
+	"StorageResourceGroup": "CNAB_AZURE_STORAGE_RESOURCE_GROUP",
+	"SusbcriptionId":       "CNAB_AZURE_SUBSCRIPTION_ID",
 	"BundleTag":            "CNAB_BUNDLE_TAG",
 }
 
@@ -37,6 +37,7 @@ var optionalSettings = map[string]interface{}{
 
 const (
 	AzureStorageConnectionString = "AZURE_STORAGE_CONNECTION_STRING"
+	CnabStateStorageAccountKey   = "CNAB_AZURE_STATE_STORAGE_ACCOUNT_KEY"
 )
 
 var debug bool
@@ -141,6 +142,8 @@ func setStorageAccountConnectionString() error {
 	}
 
 	os.Setenv(AzureStorageConnectionString, fmt.Sprintf("AccountName=%s;AccountKey=%s", requiredSettings["StorageAccountName"], *(((*result.Keys)[0]).Value)))
+	// this is used by the Azure CNAB Driver
+	os.Setenv(CnabStateStorageAccountKey, *(((*result.Keys)[0]).Value))
 	return nil
 }
 

@@ -30,6 +30,16 @@ func ErrorInternalServerErrorFromError(err error) render.Renderer {
 	}
 }
 
+func ErrorInternalServerError(message string) render.Renderer {
+	return &ErrorResponse{
+		&RequestError{
+			HTTPStatusCode: 500,
+			Status:         "Internal Server Error",
+			Message:        message,
+		},
+	}
+}
+
 func ErrorInvalidRequestFromError(err error) render.Renderer {
 	return &ErrorResponse{
 		&RequestError{
