@@ -25,16 +25,17 @@ func LoginToAzure() (LoginInfo, error) {
 	var loginInfo LoginInfo
 	var err error
 
-	// Attempt to login with MSI
 	if checkForMSIEndpoint() {
+		// Attempt to login with MSI
 		log.Debug("Attempting to Login with MSI")
 		msiConfig := auth.NewMSIConfig()
 		loginInfo.Authorizer, err = msiConfig.Authorizer()
-		if err != nil {
-			return loginInfo, fmt.Errorf("Attempt to set Authorizer with MSI failed: %v", err)
+		if err == nil {
+			log.Debug("Logged in with MSI")
+			return loginInfo, nil
 		}
-		log.Debug("Logged in with MSI")
-		return loginInfo, nil
+	} else {
+		log.Debug("Unable to find MSI Endpoint")
 	}
 
 	// Attempt to Login using azure CLI
@@ -43,8 +44,12 @@ func LoginToAzure() (LoginInfo, error) {
 	if err == nil {
 		log.Debug("Logged in with CLI")
 		return loginInfo, nil
+	} else {
+		log.Debugf("Failed to login with Azure cli: %v", err)
 	}
-	return loginInfo, fmt.Errorf("Cannot login to Azure - no valid credentials provided or available, failed to login with Azure cli: %v", err)
+
+	return loginInfo, fmt.Errorf("Failed to login with MSI: %v", err)
+
 }
 
 func checkForMSIEndpoint() bool {
@@ -56,6 +61,7 @@ func checkForMSIEndpoint() bool {
 		}
 		_, err = client.Head(msiTokenEndpoint)
 		if err != nil {
+			log.Debugf("Failed to get MSI endpoint:%v", err)
 			break
 		}
 

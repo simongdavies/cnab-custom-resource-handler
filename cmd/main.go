@@ -47,6 +47,7 @@ var rootCmd = &cobra.Command{
 	Long:  `Launches a web server that provides ARM RPC compliant CRUD endpoints for a CNAB Bundle which can be used as an ARM Custom resource provider implementation for CNAB `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
+		log.SetReportCaller(true)
 		if debug {
 			log.SetLevel(log.DebugLevel)
 		}
