@@ -209,7 +209,8 @@ func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func executePorterCommand(args []string) ([]byte, error) {
-	args = append(args, "-d", "azure", "-o", "json")
+	args = append(args, "--driver", "azure", "--output", "json")
+	log.Debugf("porter %v", args)
 	out, err := exec.Command("porter", args...).CombinedOutput()
 
 	if err != nil {
