@@ -15,7 +15,7 @@
     },
     "rpName": {
       "type": "string",
-      "defaultValue": "sqlServerAlwaysOn"
+      "defaultValue": "sqlServerAlwaysOn1"
     },
     "debug": {
       "type": "bool",
@@ -147,11 +147,9 @@
               ],
               "command": [
                 "caddy",
-                  "reverse-proxy", 
-                  "--from",
-                  "[replace(concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io'),'-','')]",
-                  "--to",
-                  "[concat(':',variables('port'))]"
+                "run",
+                "--config",
+                "/test/Caddyfile"
               ],
               "resources": {
                 "requests": {
@@ -166,7 +164,7 @@
                 },
                 {
                   "name": "caddy-file",
-                  "mountPath": "/etc/caddy"
+                  "mountPath": "/test"
                 }
               ]
             }

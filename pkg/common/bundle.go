@@ -5,3 +5,4 @@ import (
 )
 
 var BundlePullOptions *porter.BundlePullOptions
+var TrimmedBundleTag string

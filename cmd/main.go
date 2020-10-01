@@ -76,6 +76,7 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
+		common.TrimmedBundleTag = reference.TrimNamed(ref).String()
 		common.BundlePullOptions = &porter.BundlePullOptions{
 			Tag:              requiredSettings["BundleTag"],
 			Force:            optionalSettings["ForcePull"].(bool),

@@ -29,12 +29,20 @@ type BundleCommandProperties struct {
 type BundleCommandOutputs struct {
 	Outputs map[string]interface{} `json:"outputs,omitempty"`
 }
-
+type RPProperties struct {
+	Id           string `json:"id"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	Installation string `json:"Installation"`
+}
 type BundleRP struct {
-	Id         string                   `json:"id"`
-	Name       string                   `json:"name"`
-	Type       string                   `json:"type"`
+	RPProperties
 	Properties *BundleCommandProperties `json:"properties"`
+}
+
+type BundleRPOutput struct {
+	*RPProperties
+	Properties *BundleCommandOutputs `json:"properties"`
 }
 
 func BundleCtx(next http.Handler) http.Handler {
@@ -45,7 +53,7 @@ func BundleCtx(next http.Handler) http.Handler {
 		}
 
 		if err := render.Bind(r, payload); err != nil {
-			render.Render(w, r, helpers.ErrorInvalidRequestFromError(err))
+			_ = render.Render(w, r, helpers.ErrorInvalidRequestFromError(err))
 			return
 		}
 
@@ -69,7 +77,7 @@ func (payload *BundleRP) Bind(r *http.Request) error {
 		return errors.New("x-ms-customproviders-requestpath missing from request")
 	}
 
-	// TODO update to use library
+	// TODO update to use SDK
 	payload.Id = requestPath
 	resourceIDParts := strings.Split(requestPath, "/")
 	payload.Name = resourceIDParts[len(resourceIDParts)-1]
@@ -80,5 +88,9 @@ func (payload *BundleRP) Bind(r *http.Request) error {
 }
 
 func (payload *BundleRP) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+func (payload *BundleRPOutput) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }

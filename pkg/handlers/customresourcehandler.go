@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -16,6 +17,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/azure"
+	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/models"
 	log "github.com/sirupsen/logrus"
@@ -46,28 +48,35 @@ func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
-	cnabRPData := r.Context().Value(models.BundleContext).(*models.BundleRP)
-	log.Infof("Received Request: %s", cnabRPData.Properties.RequestPath)
-	parts := strings.Split(cnabRPData.Properties.RequestPath, "/")
-	installationName := parts[len(parts)-1]
+	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
+	log.Infof("Received PUT Request: %s", rpInput.Properties.RequestPath)
+	installationName := getInstallationName(rpInput.Properties.RequestPath)
 	var args []string
 
-	args = append(args, "install", installationName, "-t", cnabRPData.Properties.BundlePullOptions.Tag)
+	action := "install"
+	if exists, err := checkIfInstallationExists(installationName); err != nil {
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
+		return
+	} else if exists {
+		action = "upgrade"
+	}
 
-	if len(cnabRPData.Properties.Parameters) > 0 {
-		paramFile, err := writeParametersFile(cnabRPData.Properties.Parameters)
+	args = append(args, action, installationName, "-t", rpInput.Properties.BundlePullOptions.Tag)
+
+	if len(rpInput.Properties.Parameters) > 0 {
+		paramFile, err := writeParametersFile(rpInput.Properties.Parameters)
 		if err != nil {
-			render.Render(w, r, helpers.ErrorInternalServerErrorFromError(err))
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(err))
 			return
 		}
 		args = append(args, "-p", paramFile.Name())
 		defer os.Remove(paramFile.Name())
 	}
 
-	if len(cnabRPData.Properties.Credentials) > 0 {
-		credFile, err := writeCredentialsFile(cnabRPData.Properties.Parameters)
+	if len(rpInput.Properties.Credentials) > 0 {
+		credFile, err := writeCredentialsFile(rpInput.Properties.Parameters)
 		if err != nil {
-			render.Render(w, r, helpers.ErrorInternalServerErrorFromError(err))
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(err))
 			return
 		}
 		args = append(args, "-c", credFile.Name())
@@ -75,7 +84,7 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if out, err := executePorterCommand(args); err != nil {
-		render.Render(w, r, helpers.ErrorInternalServerError(string(out)))
+		_ = render.Render(w, r, helpers.ErrorInternalServerError(string(out)))
 		return
 	}
 
@@ -83,13 +92,13 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	args = append(args, "installations", "output", "list", "-i", installationName)
 	out, err := executePorterCommand(args)
 	if err != nil {
-		render.Render(w, r, helpers.ErrorInternalServerError(string(out)))
+		_ = render.Render(w, r, helpers.ErrorInternalServerError(string(out)))
 		return
 	}
 
 	var cmdOutput []porterOutput
-	if err := json.Unmarshal(out, cmdOutput); err != nil {
-		render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to read json from command: %v", err)))
+	if err := json.Unmarshal(out, &cmdOutput); err != nil {
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to read json from command: %v", err)))
 		return
 	}
 
@@ -100,7 +109,16 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 		output.Outputs[v.Name] = v.Value
 	}
 
-	render.DefaultResponder(w, r, output)
+	rpOutput := models.BundleRPOutput{
+		RPProperties: &models.RPProperties{
+			Type:         rpInput.Type,
+			Id:           rpInput.Id,
+			Name:         rpInput.Name,
+			Installation: installationName,
+		},
+		Properties: &output,
+	}
+	render.DefaultResponder(w, r, rpOutput)
 }
 
 func writeParametersFile(params map[string]interface{}) (*os.File, error) {
@@ -165,9 +183,29 @@ func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	render.DefaultResponder(w, r, fmt.Sprintf("Post Hello World!! from %s", r.RequestURI))
 }
 
+//TODO handle async operations
 func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
-	log.Infof("Received Request: %s", r.RequestURI)
-	render.DefaultResponder(w, r, fmt.Sprintf("Delete Hello World!! from %s", r.RequestURI))
+	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
+	log.Infof("Received DELETE Request: %s", rpInput.Properties.RequestPath)
+	installationName := getInstallationName(rpInput.Properties.RequestPath)
+	var args []string
+
+	if exists, err := checkIfInstallationExists(installationName); err != nil {
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
+		return
+	} else if !exists {
+		render.Status(r, http.StatusNoContent)
+		return
+	}
+
+	args = append(args, "uninstall", installationName, "--delete")
+
+	out, err := executePorterCommand(args)
+	if err != nil {
+		_ = render.Render(w, r, helpers.ErrorInternalServerError(string(out)))
+		return
+	}
+	render.Status(r, http.StatusOK)
 }
 
 func executePorterCommand(args []string) ([]byte, error) {
@@ -178,4 +216,21 @@ func executePorterCommand(args []string) ([]byte, error) {
 		return nil, fmt.Errorf("Porter command failed: %v", err)
 	}
 	return out, nil
+}
+func getInstallationName(requestPath string) string {
+	data := []byte(fmt.Sprintf("%s%s", strings.ToLower(common.TrimmedBundleTag), strings.ToLower(requestPath)))
+	hash := sha256.Sum256(data)
+	return fmt.Sprintf("%x", hash)
+}
+
+func checkIfInstallationExists(name string) (bool, error) {
+	args := []string{}
+	args = append(args, " installations", "show", name)
+	if out, err := executePorterCommand(args); err != nil {
+		if strings.Contains(strings.ToLower(string(out)), "installation does not exist") {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }

@@ -9,7 +9,7 @@ import (
 type RequestError struct {
 	HTTPStatusCode int    `json:"-"`
 	Status         string `json:"status"`
-	Message        string `json:"error"`
+	Message        string `json:"error,omitempty"`
 }
 type ErrorResponse struct {
 	*RequestError `json:"ErrorResponse"`
@@ -26,6 +26,15 @@ func ErrorInternalServerErrorFromError(err error) render.Renderer {
 			HTTPStatusCode: 500,
 			Status:         "Internal Server Error",
 			Message:        err.Error(),
+		},
+	}
+}
+
+func ErrorNotFound() render.Renderer {
+	return &ErrorResponse{
+		&RequestError{
+			HTTPStatusCode: 404,
+			Status:         "Resource Not Found",
 		},
 	}
 }

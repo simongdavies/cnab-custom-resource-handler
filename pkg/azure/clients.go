@@ -9,6 +9,6 @@ import (
 func GetStorageAccountsClient(subscriptionID string, authorizer autorest.Authorizer, userAgent string) storage.AccountsClient {
 	accountsClient := storage.NewAccountsClient(subscriptionID)
 	accountsClient.Authorizer = authorizer
-	accountsClient.AddToUserAgent(userAgent)
+	_ = accountsClient.AddToUserAgent(userAgent)
 	return accountsClient
 }
