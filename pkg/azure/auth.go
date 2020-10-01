@@ -62,6 +62,8 @@ func checkForMSIEndpoint() bool {
 		_, err = client.Head(msiTokenEndpoint)
 		if err != nil {
 			log.Debugf("Failed to get MSI endpoint:%v", err)
+		} else {
+			break
 		}
 	}
 	return err == nil
