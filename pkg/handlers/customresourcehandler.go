@@ -61,7 +61,7 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 		action = "upgrade"
 	}
 
-	args = append(args, action, installationName, "-t", rpInput.Properties.BundlePullOptions.Tag)
+	args = append(args, action, installationName, "--tag", rpInput.Properties.BundlePullOptions.Tag)
 
 	if len(rpInput.Properties.Parameters) > 0 {
 		paramFile, err := writeParametersFile(rpInput.Properties.Parameters)
