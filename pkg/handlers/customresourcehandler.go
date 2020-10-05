@@ -250,5 +250,5 @@ func isDriverCommand(cmd string) bool {
 }
 
 func isOutputCommand(cmd string) bool {
-	return strings.Contains("installations", cmd)
+	return cmd == "installations"
 }
