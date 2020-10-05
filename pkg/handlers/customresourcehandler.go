@@ -162,7 +162,7 @@ func writeCredentialsFile(creds map[string]interface{}) (*os.File, error) {
 func validateCredentials(creds map[string]interface{}) error {
 
 	for k := range common.Bundle.Credentials {
-		log.Debugf("Credential Name:%", k)
+		log.Debugf("Credential Name:%s", k)
 	}
 
 	for k, v := range common.Bundle.Credentials {
@@ -182,7 +182,7 @@ func validateCredentials(creds map[string]interface{}) error {
 func validateParameters(params map[string]interface{}) error {
 
 	for k := range common.Bundle.Parameters {
-		log.Debugf("Parameter Name:%", k)
+		log.Debugf("Parameter Name:%s", k)
 	}
 
 	for k, v := range common.Bundle.Parameters {
