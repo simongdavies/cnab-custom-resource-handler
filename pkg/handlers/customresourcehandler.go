@@ -212,16 +212,21 @@ func executePorterCommand(args []string) ([]byte, error) {
 	if isDriverCommand(args[0]) {
 		args = append(args, "--driver", "azure")
 	}
-	args = append(args, "--output", "json")
+
+	if isOutputCommand(args[0]) {
+		args = append(args, "--output", "json")
+	}
+
 	log.Debugf("porter %v", args)
 	out, err := exec.Command("porter", args...).CombinedOutput()
-
 	if err != nil {
 		log.Debugf("Command failed Error:%v Output: %s", err, string(out))
 		return out, fmt.Errorf("Porter command failed: %v", err)
 	}
+
 	return out, nil
 }
+
 func getInstallationName(requestPath string) string {
 	data := []byte(fmt.Sprintf("%s%s", strings.ToLower(common.TrimmedBundleTag), strings.ToLower(requestPath)))
 	hash := sha256.Sum256(data)
@@ -242,4 +247,8 @@ func checkIfInstallationExists(name string) (bool, error) {
 
 func isDriverCommand(cmd string) bool {
 	return strings.Contains("installupgradeuninstallaction", cmd)
+}
+
+func isOutputCommand(cmd string) bool {
+	return strings.Contains("installations", cmd)
 }
