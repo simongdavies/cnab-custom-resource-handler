@@ -14,12 +14,12 @@ import (
 
 var BundlePullOptions *porter.BundlePullOptions
 var TrimmedBundleTag string
-var Bundle *bundle.Bundle
+var RPBundle *bundle.Bundle
 
-func PullBundle() error {
+func PullBundle() (*bundle.Bundle, error) {
 	ref, err := reference.ParseNormalizedNamed(BundlePullOptions.Tag)
 	if err != nil {
-		return fmt.Errorf("Invalid bundle tag format %s, expected REGISTRY/name:tag %w", BundlePullOptions.Tag, err)
+		return nil, fmt.Errorf("Invalid bundle tag format %s, expected REGISTRY/name:tag %w", BundlePullOptions.Tag, err)
 	}
 
 	var insecureRegistries []string
@@ -28,10 +28,9 @@ func PullBundle() error {
 		insecureRegistries = append(insecureRegistries, reg)
 	}
 
-	Bundle, _, err := remotes.Pull(context.Background(), ref, remotes.CreateResolver(config.LoadDefaultConfigFile(os.Stderr), insecureRegistries...))
+	bundle, _, err := remotes.Pull(context.Background(), ref, remotes.CreateResolver(config.LoadDefaultConfigFile(os.Stderr), insecureRegistries...))
 	if err != nil {
-		return fmt.Errorf("Unable to pull remote bundle %w", err)
+		return nil, fmt.Errorf("Unable to pull remote bundle %w", err)
 	}
-	_ = Bundle
-	return nil
+	return bundle, nil
 }

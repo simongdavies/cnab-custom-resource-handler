@@ -25,7 +25,7 @@ import (
 
 var requiredSettings = map[string]string{
 	"StorageAccountName":   "CNAB_AZURE_STATE_STORAGE_ACCOUNT_NAME",
-	"StorageResourceGroup": "CNAB_AZURE_STORAGE_RESOURCE_GROUP",
+	"StorageResourceGroup": "CNAB_AZURE_STATE_STORAGE_RESOURCE_GROUP",
 	"SusbcriptionId":       "CNAB_AZURE_SUBSCRIPTION_ID",
 	"BundleTag":            "CNAB_BUNDLE_TAG",
 }
@@ -82,10 +82,12 @@ var rootCmd = &cobra.Command{
 			Force:            optionalSettings["ForcePull"].(bool),
 			InsecureRegistry: optionalSettings["AllowInsecureRegistry"].(bool),
 		}
-		if err := common.PullBundle(); err != nil {
+		bun, err := common.PullBundle()
+		if err != nil {
 			log.Errorf("Error pulling bundle %v", err)
 			return err
 		}
+		common.RPBundle = bun
 
 		log.Debug("Creating Router")
 		router := chi.NewRouter()

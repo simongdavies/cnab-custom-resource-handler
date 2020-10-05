@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -52,6 +53,12 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Received PUT Request: %s", rpInput.Properties.RequestPath)
 	installationName := getInstallationName(rpInput.Properties.RequestPath)
 	var args []string
+	dir, err := ioutil.TempDir("", "")
+	if err != nil {
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("error creating temp dir: %v", err)))
+		return
+	}
+	defer os.RemoveAll(dir)
 
 	action := "install"
 	if exists, err := checkIfInstallationExists(installationName); err != nil {
@@ -64,7 +71,7 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	args = append(args, action, installationName, "--tag", rpInput.Properties.BundlePullOptions.Tag)
 
 	if len(rpInput.Properties.Parameters) > 0 {
-		paramFile, err := writeParametersFile(rpInput.Properties.Parameters)
+		paramFile, err := writeParametersFile(rpInput.Properties.Parameters, dir)
 		if err != nil {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(err))
 			return
@@ -74,7 +81,7 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(rpInput.Properties.Credentials) > 0 {
-		credFile, err := writeCredentialsFile(rpInput.Properties.Parameters)
+		credFile, err := writeCredentialsFile(rpInput.Properties.Credentials, dir)
 		if err != nil {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(err))
 			return
@@ -106,7 +113,7 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 		Outputs: make(map[string]interface{}),
 	}
 	for _, v := range cmdOutput {
-		if IsSenstive, _ := common.Bundle.IsOutputSensitive(v.Name); !IsSenstive {
+		if IsSenstive, _ := common.RPBundle.IsOutputSensitive(v.Name); !IsSenstive {
 			output.Outputs[v.Name] = v.Value
 		}
 	}
@@ -123,7 +130,7 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	render.DefaultResponder(w, r, rpOutput)
 }
 
-func writeParametersFile(params map[string]interface{}) (*os.File, error) {
+func writeParametersFile(params map[string]interface{}, dir string) (*os.File, error) {
 
 	if err := validateParameters(params); err != nil {
 		return nil, err
@@ -131,7 +138,7 @@ func writeParametersFile(params map[string]interface{}) (*os.File, error) {
 
 	ps := parameters.NewParameterSet("parameter-set")
 	for k, v := range params {
-		vs, err := setupArg(k, v)
+		vs, err := setupArg(k, v, len(common.RPBundle.Parameters[k].Destination.Path) > 0, dir)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to set up parameter: %v", err)
 		}
@@ -141,7 +148,7 @@ func writeParametersFile(params map[string]interface{}) (*os.File, error) {
 	return writeFile(ps)
 }
 
-func writeCredentialsFile(creds map[string]interface{}) (*os.File, error) {
+func writeCredentialsFile(creds map[string]interface{}, dir string) (*os.File, error) {
 
 	if err := validateCredentials(creds); err != nil {
 		return nil, err
@@ -149,7 +156,7 @@ func writeCredentialsFile(creds map[string]interface{}) (*os.File, error) {
 
 	cs := credentials.NewCredentialSet("credential-set")
 	for k, v := range creds {
-		vs, err := setupArg(k, v)
+		vs, err := setupArg(k, v, len(common.RPBundle.Credentials[k].Path) > 0, dir)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to set up credential: %v", err)
 		}
@@ -161,18 +168,18 @@ func writeCredentialsFile(creds map[string]interface{}) (*os.File, error) {
 
 func validateCredentials(creds map[string]interface{}) error {
 
-	for k := range common.Bundle.Credentials {
+	for k := range common.RPBundle.Credentials {
 		log.Debugf("Credential Name:%s", k)
 	}
 
-	for k, v := range common.Bundle.Credentials {
+	for k, v := range common.RPBundle.Credentials {
 		if _, ok := creds[k]; !ok && v.Required {
 			return fmt.Errorf("Credential %s is required", k)
 		}
 	}
 
 	for k := range creds {
-		if _, ok := common.Bundle.Credentials[k]; !ok {
+		if _, ok := common.RPBundle.Credentials[k]; !ok {
 			return fmt.Errorf("Credential %s is not specified in bundle", k)
 		}
 	}
@@ -181,31 +188,49 @@ func validateCredentials(creds map[string]interface{}) error {
 
 func validateParameters(params map[string]interface{}) error {
 
-	for k := range common.Bundle.Parameters {
+	for k := range common.RPBundle.Parameters {
 		log.Debugf("Parameter Name:%s", k)
 	}
 
-	for k, v := range common.Bundle.Parameters {
+	for k, v := range common.RPBundle.Parameters {
 		if _, ok := params[k]; !ok && v.Required {
 			return fmt.Errorf("Parameter %s is required", k)
 		}
 	}
 
 	for k := range params {
-		if _, ok := common.Bundle.Parameters[k]; !ok {
+		if _, ok := common.RPBundle.Parameters[k]; !ok {
 			return fmt.Errorf("Parameter %s is not specified in bundle", k)
 		}
 	}
 	return nil
 }
 
-func setupArg(key string, value interface{}) (*valuesource.Strategy, error) {
+func setupArg(key string, value interface{}, isFile bool, dir string) (*valuesource.Strategy, error) {
 	name := getEnvVarName(key)
 	val := fmt.Sprintf("%v", value)
 	c := valuesource.Strategy{Name: key}
-	c.Source.Key = host.SourceEnv
-	c.Source.Value = name
-	os.Setenv(name, val)
+
+	if isFile {
+		// File data should be encoded as base64
+		file, err := ioutil.TempFile(dir, "cnab*")
+		if err != nil {
+			return nil, fmt.Errorf("Failed to create temp file for %s :%v", key, err)
+		}
+		c.Source.Key = host.SourcePath
+		data, err := base64.StdEncoding.DecodeString(val)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to decode data for %s :%v", key, err)
+		}
+		if _, err := file.Write(data); err != nil {
+			return nil, fmt.Errorf("Failed to write date to file for %s :%v", key, err)
+		}
+		c.Source.Value = file.Name()
+	} else {
+		c.Source.Key = host.SourceEnv
+		c.Source.Value = name
+		os.Setenv(name, val)
+	}
 	return &c, nil
 }
 

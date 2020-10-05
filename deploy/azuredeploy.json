@@ -108,6 +108,22 @@
       ]
     },
     {
+      "name": "[concat(variables('cnab_azure_state_storage_account_name'), '/installstate')]",
+      "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
+      "apiVersion": "2019-06-01",
+      "dependsOn": [
+        "[variables('cnab_azure_state_storage_account_name')]"
+      ]
+    },
+    {
+      "name": "[concat(variables('cnab_azure_state_storage_account_name'), '/operations')]",
+      "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
+      "apiVersion": "2019-06-01",
+      "dependsOn": [
+        "[variables('cnab_azure_state_storage_account_name')]"
+      ]
+    },
+    {
       "name": "cnab-custom-resource",
       "type": "Microsoft.ContainerInstance/containerGroups",
       "apiVersion": "2019-12-01",
@@ -184,12 +200,20 @@
                   "value": "[variables('port')]"
                 },
                 {
+                  "name": "CNAB_AZURE_STATE_STORAGE_RESOURCE_GROUP",
+                  "value": "[resourceGroup().name]"
+                },
+                {
                   "name": "CNAB_AZURE_STATE_STORAGE_ACCOUNT_NAME",
                   "value": "[variables('cnab_azure_state_storage_account_name')]"
                 },
                 {
-                  "name": "CNAB_AZURE_STORAGE_RESOURCE_GROUP",
-                  "value": "[resourceGroup().name]"
+                  "name": "CNAB_AZURE_STATE_STORAGE_ACCOUNT_KEY",
+                  "value": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('cnab_azure_state_storage_account_name')), '2019-04-01').keys[0].value]"
+                },
+                {
+                  "name": "CNAB_AZURE_STATE_STORAGE_FILESHARE",
+                  "value": "[variables('cnab_azure_state_fileshare')]"
                 },
                 {
                   "name": "CNAB_AZURE_SUBSCRIPTION_ID",
@@ -198,6 +222,10 @@
                 {
                   "name": "CNAB_BUNDLE_TAG",
                   "value": "[parameters('bundleTag')]"
+                },
+                                {
+                  "name": "CNAB_AZURE_RESOURCE_GROUP",
+                  "value": "[resourceGroup().name]"
                 },
                 {
                   "name": "CNAB_AZURE_VERBOSE",
