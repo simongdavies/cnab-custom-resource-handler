@@ -126,13 +126,11 @@ func writeParametersFile(params map[string]interface{}) (*os.File, error) {
 	ps := parameters.NewParameterSet("parameter-set")
 	//TODO validate the parameters against the bundle
 	for k, v := range params {
-		name := getEnvVarName(k)
-		val := fmt.Sprintf("%v", v)
-		p := valuesource.Strategy{Name: name}
-		p.Source.Key = host.SourceEnv
-		p.Source.Value = val
-		ps.Parameters = append(ps.Parameters, p)
-		os.Setenv(name, val)
+		vs, err := setupArg(k, v)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to set up parameter: %v", err)
+		}
+		ps.Parameters = append(ps.Parameters, *vs)
 	}
 
 	return writeFile(ps)
@@ -143,16 +141,24 @@ func writeCredentialsFile(creds map[string]interface{}) (*os.File, error) {
 	cs := credentials.NewCredentialSet("credential-set")
 	//TODO validate the credentials against the bundle
 	for k, v := range creds {
-		name := getEnvVarName(k)
-		val := fmt.Sprintf("%v", v)
-		c := valuesource.Strategy{Name: name}
-		c.Source.Key = host.SourceEnv
-		c.Source.Value = val
-		cs.Credentials = append(cs.Credentials, c)
-		os.Setenv(name, val)
+		vs, err := setupArg(k, v)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to set up credential: %v", err)
+		}
+		cs.Credentials = append(cs.Credentials, *vs)
 	}
 
 	return writeFile(cs)
+}
+
+func setupArg(key string, value interface{}) (*valuesource.Strategy, error) {
+	name := getEnvVarName(key)
+	val := fmt.Sprintf("%v", value)
+	c := valuesource.Strategy{Name: key}
+	c.Source.Key = host.SourceEnv
+	c.Source.Value = name
+	os.Setenv(name, val)
+	return &c, nil
 }
 
 func writeFile(filedata interface{}) (*os.File, error) {
