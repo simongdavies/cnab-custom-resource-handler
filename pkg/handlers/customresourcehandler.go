@@ -106,7 +106,9 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 		Outputs: make(map[string]interface{}),
 	}
 	for _, v := range cmdOutput {
-		output.Outputs[v.Name] = v.Value
+		if IsSenstive, _ := common.Bundle.IsOutputSensitive(v.Name); !IsSenstive {
+			output.Outputs[v.Name] = v.Value
+		}
 	}
 
 	rpOutput := models.BundleRPOutput{
@@ -123,8 +125,11 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 
 func writeParametersFile(params map[string]interface{}) (*os.File, error) {
 
+	if err := validateParameters(params); err != nil {
+		return nil, err
+	}
+
 	ps := parameters.NewParameterSet("parameter-set")
-	//TODO validate the parameters against the bundle
 	for k, v := range params {
 		vs, err := setupArg(k, v)
 		if err != nil {
@@ -138,8 +143,11 @@ func writeParametersFile(params map[string]interface{}) (*os.File, error) {
 
 func writeCredentialsFile(creds map[string]interface{}) (*os.File, error) {
 
+	if err := validateCredentials(creds); err != nil {
+		return nil, err
+	}
+
 	cs := credentials.NewCredentialSet("credential-set")
-	//TODO validate the credentials against the bundle
 	for k, v := range creds {
 		vs, err := setupArg(k, v)
 		if err != nil {
@@ -149,6 +157,36 @@ func writeCredentialsFile(creds map[string]interface{}) (*os.File, error) {
 	}
 
 	return writeFile(cs)
+}
+
+func validateCredentials(creds map[string]interface{}) error {
+	for k, v := range common.Bundle.Credentials {
+		if _, ok := creds[k]; !ok && v.Required {
+			return fmt.Errorf("Credential %s is required", k)
+		}
+	}
+
+	for k := range creds {
+		if _, ok := common.Bundle.Credentials[k]; !ok {
+			return fmt.Errorf("Credential %s is not specified in bundle", k)
+		}
+	}
+	return nil
+}
+
+func validateParameters(params map[string]interface{}) error {
+	for k, v := range common.Bundle.Parameters {
+		if _, ok := params[k]; !ok && v.Required {
+			return fmt.Errorf("Parameter %s is required", k)
+		}
+	}
+
+	for k := range params {
+		if _, ok := common.Bundle.Parameters[k]; !ok {
+			return fmt.Errorf("Parameter %s is not specified in bundle", k)
+		}
+	}
+	return nil
 }
 
 func setupArg(key string, value interface{}) (*valuesource.Strategy, error) {

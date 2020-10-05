@@ -82,6 +82,10 @@ var rootCmd = &cobra.Command{
 			Force:            optionalSettings["ForcePull"].(bool),
 			InsecureRegistry: optionalSettings["AllowInsecureRegistry"].(bool),
 		}
+		if err := common.PullBundle(); err != nil {
+			log.Errorf("Error pulling bundle %v", err)
+			return err
+		}
 
 		log.Debug("Creating Router")
 		router := chi.NewRouter()
