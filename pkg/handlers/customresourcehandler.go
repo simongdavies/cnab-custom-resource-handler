@@ -209,7 +209,10 @@ func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func executePorterCommand(args []string) ([]byte, error) {
-	args = append(args, "--driver", "azure", "--output", "json")
+	if isDriverCommand(args[0]) {
+		args = append(args, "--driver", "azure")
+	}
+	args = append(args, "--output", "json")
 	log.Debugf("porter %v", args)
 	out, err := exec.Command("porter", args...).CombinedOutput()
 
@@ -235,4 +238,8 @@ func checkIfInstallationExists(name string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func isDriverCommand(cmd string) bool {
+	return strings.Contains("installupgradeuninstallaction", cmd)
 }
