@@ -14,7 +14,7 @@ import (
 
 var BundlePullOptions *porter.BundlePullOptions
 var TrimmedBundleTag string
-var Bundle bundle.Bundle
+var Bundle *bundle.Bundle
 
 func PullBundle() error {
 	ref, err := reference.ParseNormalizedNamed(BundlePullOptions.Tag)
