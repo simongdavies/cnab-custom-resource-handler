@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"get.porter.sh/porter/pkg/parameters"
+	az "github.com/Azure/go-autorest/autorest/azure"
 	"github.com/cnabio/cnab-go/credentials"
 	"github.com/cnabio/cnab-go/secrets/host"
 	"github.com/cnabio/cnab-go/valuesource"
@@ -33,7 +34,6 @@ type porterOutput struct {
 func NewCustomResourceHandler() chi.Router {
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
-	r.Use(azure.Login)
 	r.Use(models.BundleCtx)
 	r.Get("/*", getCustomResourceHandler)
 	r.Put("/*", putCustomResourceHandler)
@@ -43,15 +43,73 @@ func NewCustomResourceHandler() chi.Router {
 }
 
 func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
-	requestPath := r.Header.Get("x-ms-customproviders-requestpath")
-	log.Infof("Received Request: %s", requestPath)
-	render.DefaultResponder(w, r, fmt.Sprintf("Get Hello World!! from %s", r.URL.String()))
+	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
+	log.Infof("Received GET Request: %s", rpInput.Id)
+
+	if len(rpInput.Name) == 0 {
+		listCustomResourceHandler(w, r, rpInput.SubscriptionId)
+		return
+	}
+
+	installationName := getInstallationName(rpInput.Id)
+
+	//TODO need to handle a get on a resource that has an operation in progress
+	// _, err := azure.GetRPState(rpInput.SubscriptionId, rpInput.Id)
+	// if err != nil {
+	// 	_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get RP state: %v", err)))
+	// 	return
+	// }
+
+	if exists, err := checkIfInstallationExists(installationName); err != nil {
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
+		return
+	} else if !exists {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	rpOutput, err := getRPOutput(installationName, rpInput)
+	if err != nil {
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed getRPOutput: %v", err)))
+		return
+	}
+	render.DefaultResponder(w, r, rpOutput)
+}
+
+func listCustomResourceHandler(w http.ResponseWriter, r *http.Request, subscriptionId string) {
+	// TODO handle paging
+	res, err := azure.ListRPState(subscriptionId)
+	if err != nil {
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed getRPOutput: %v", err)))
+		return
+	}
+
+	list := make([]*models.BundleRPOutput, 0)
+	for _, v := range res.Entities {
+
+		resource, err := az.ParseResourceID(v.RowKey)
+		if err != nil {
+
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to parse resourceId %s: %v", v.RowKey, err)))
+			return
+		}
+		requestParts := strings.Split(v.RowKey, "/")
+		output := models.BundleRPOutput{
+			RPProperties: &models.RPProperties{
+				Type: strings.Join(requestParts[6:len(requestParts)-1], "/"),
+				Id:   v.RowKey,
+				Name: resource.ResourceName,
+			},
+		}
+		list = append(list, &output)
+		render.DefaultResponder(w, r, list)
+	}
 }
 
 func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
-	log.Infof("Received PUT Request: %s", rpInput.Properties.RequestPath)
-	installationName := getInstallationName(rpInput.Properties.RequestPath)
+	log.Infof("Received PUT Request: %s", rpInput.Id)
+	installationName := getInstallationName(rpInput.Id)
 	var args []string
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
@@ -95,38 +153,17 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	args = []string{}
-	args = append(args, "installations", "output", "list", "-i", installationName)
-	out, err := executePorterCommand(args)
+	if err := azure.PutRPState(rpInput.SubscriptionId, rpInput.Id, rpInput.Properties); err != nil {
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to save RP state from put: %v", err)))
+		return
+	}
+
+	rpOutput, err := getRPOutput(installationName, rpInput)
 	if err != nil {
-		_ = render.Render(w, r, helpers.ErrorInternalServerError(string(out)))
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed getRPOutput: %v", err)))
 		return
 	}
 
-	var cmdOutput []porterOutput
-	if err := json.Unmarshal(out, &cmdOutput); err != nil {
-		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to read json from command: %v", err)))
-		return
-	}
-
-	output := models.BundleCommandOutputs{
-		Outputs: make(map[string]interface{}),
-	}
-	for _, v := range cmdOutput {
-		if IsSenstive, _ := common.RPBundle.IsOutputSensitive(v.Name); !IsSenstive {
-			output.Outputs[v.Name] = v.Value
-		}
-	}
-
-	rpOutput := models.BundleRPOutput{
-		RPProperties: &models.RPProperties{
-			Type:         rpInput.Type,
-			Id:           rpInput.Id,
-			Name:         rpInput.Name,
-			Installation: installationName,
-		},
-		Properties: &output,
-	}
 	render.DefaultResponder(w, r, rpOutput)
 }
 
@@ -146,6 +183,48 @@ func writeParametersFile(params map[string]interface{}, dir string) (*os.File, e
 	}
 
 	return writeFile(ps)
+}
+
+func getRPOutput(installationName string, rpInput *models.BundleRP) (*models.BundleRPOutput, error) {
+
+	args := []string{}
+	args = append(args, "installations", "output", "list", "-i", installationName)
+	out, err := executePorterCommand(args)
+	if err != nil {
+		return nil, err
+	}
+
+	var cmdOutput []porterOutput
+	if err := json.Unmarshal(out, &cmdOutput); err != nil {
+		return nil, fmt.Errorf("Failed to read json from command: %v", err)
+	}
+
+	output := make(map[string]interface{})
+
+	output["ProvisioningState"] = "Succeeded"
+	output["Installation"] = installationName
+	for _, v := range cmdOutput {
+		log.Debugf("Installation Name:%s Output:%s", installationName, v.Name)
+		if IsSenstive, _ := common.RPBundle.IsOutputSensitive(v.Name); !IsSenstive {
+			output[v.Name] = strings.TrimSuffix(v.Value, "\\n")
+		}
+	}
+
+	for k, v := range rpInput.Properties.Parameters {
+		output[k] = v
+	}
+
+	rpOutput := models.BundleRPOutput{
+		RPProperties: &models.RPProperties{
+			Type: rpInput.Type,
+			Id:   rpInput.Id,
+			Name: rpInput.Name,
+		},
+		BundleCommandOutputs: &models.BundleCommandOutputs{
+			Outputs: output,
+		},
+	}
+	return &rpOutput, nil
 }
 
 func writeCredentialsFile(creds map[string]interface{}, dir string) (*os.File, error) {
@@ -265,19 +344,54 @@ func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 //TODO handle async operations
 func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
-	log.Infof("Received DELETE Request: %s", rpInput.Properties.RequestPath)
-	installationName := getInstallationName(rpInput.Properties.RequestPath)
+	log.Infof("Received DELETE Request: %s", rpInput.Id)
+	installationName := getInstallationName(rpInput.Id)
 	var args []string
 
 	if exists, err := checkIfInstallationExists(installationName); err != nil {
 		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
 		return
 	} else if !exists {
-		render.Status(r, http.StatusNoContent)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	args = append(args, "uninstall", installationName, "--delete")
+	dir, err := ioutil.TempDir("", "")
+	if err != nil {
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("error creating temp dir: %v", err)))
+		return
+	}
+	defer os.RemoveAll(dir)
+
+	properties, err := azure.GetRPState(rpInput.SubscriptionId, rpInput.Id)
+	if err != nil {
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get RPState for Delete: %v", err)))
+		return
+	}
+
+	rpInput.Properties = properties
+
+	args = append(args, "uninstall", installationName, "--delete", "--tag", rpInput.Properties.BundlePullOptions.Tag)
+
+	if len(rpInput.Properties.Parameters) > 0 {
+		paramFile, err := writeParametersFile(rpInput.Properties.Parameters, dir)
+		if err != nil {
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(err))
+			return
+		}
+		args = append(args, "-p", paramFile.Name())
+		defer os.Remove(paramFile.Name())
+	}
+
+	if len(rpInput.Properties.Credentials) > 0 {
+		credFile, err := writeCredentialsFile(rpInput.Properties.Credentials, dir)
+		if err != nil {
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(err))
+			return
+		}
+		args = append(args, "-c", credFile.Name())
+		defer os.Remove(credFile.Name())
+	}
 
 	out, err := executePorterCommand(args)
 	if err != nil {
@@ -312,6 +426,7 @@ func getInstallationName(requestPath string) string {
 	return fmt.Sprintf("%x", hash)
 }
 
+//TODO handle failed/successful installs
 func checkIfInstallationExists(name string) (bool, error) {
 	args := []string{}
 	args = append(args, "installations", "show", name)

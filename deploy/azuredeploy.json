@@ -33,7 +33,10 @@
     "msi_name": "cnabcustomrp",
     "roleAssignmentId": "[guid(concat(resourceGroup().id,variables('msi_name'), 'contributor'))]",
     "storage_location": "canadacentral",
-    "endPointDNSName": "[replace(concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io'),'-','')]"
+    "endPointDNSName": "[replace(concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io'),'-','')]",
+    "stateTableName": "[concat(variables('cnab_azure_state_storage_account_name'), '/default/installstate')]",
+    "aysncOpTableName": "[concat(variables('cnab_azure_state_storage_account_name'), '/default/asyncops')]",
+    "rpTypeName":"installs"
   },
   "resources": [
     {
@@ -108,7 +111,7 @@
       ]
     },
     {
-      "name": "[concat(variables('cnab_azure_state_storage_account_name'), '/installstate')]",
+      "name": "[variables('stateTableName')]",
       "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
       "apiVersion": "2019-06-01",
       "dependsOn": [
@@ -116,7 +119,7 @@
       ]
     },
     {
-      "name": "[concat(variables('cnab_azure_state_storage_account_name'), '/operations')]",
+      "name": "[variables('aysncOpTableName')]",
       "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
       "apiVersion": "2019-06-01",
       "dependsOn": [
@@ -238,6 +241,18 @@
                 {
                   "name": "CNAB_AZURE_USER_MSI_RESOURCE_ID",
                   "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('msi_name'))]"
+                },
+                {
+                  "name": "CUSTOM_RP_STATE_TABLE",
+                  "value": "[variables('stateTableName')]"
+                },
+                {
+                  "name": "CUSTOM_RP_ASYNC_OP_TABLE",
+                  "value": "[variables('aysncOpTableName')]"
+                },
+                {
+                  "name": "CUSTOM_RP_TYPE",
+                  "value": "[resourceId('Microsoft.CustomProviders/resourceProviders',parameters('rpName'),variables('rpTypeName'))]"
                 }
               ],
               "command": "[if(parameters('debug'),json('[\"/cnabcustomrphandler\",\"--debug\"]'),json('[\"/cnabcustomrphandler\"]'))]",
@@ -296,7 +311,7 @@
       "properties": {
         "resourceTypes": [
           {
-            "name": "installs",
+            "name": "[variables('rpTypeName')]",
             "routingType": "Proxy",
             "endpoint": "[concat('https://',variables('endPointDNSName'))]"
           }

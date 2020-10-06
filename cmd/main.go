@@ -28,6 +28,9 @@ var requiredSettings = map[string]string{
 	"StorageResourceGroup": "CNAB_AZURE_STATE_STORAGE_RESOURCE_GROUP",
 	"SusbcriptionId":       "CNAB_AZURE_SUBSCRIPTION_ID",
 	"BundleTag":            "CNAB_BUNDLE_TAG",
+	"AsyncOpTable":         "CUSTOM_RP_ASYNC_OP_TABLE",
+	"StateTable":           "CUSTOM_RP_STATE_TABLE",
+	"CustomRPType":         "CUSTOM_RP_TYPE",
 }
 
 var optionalSettings = map[string]interface{}{
@@ -59,7 +62,8 @@ var rootCmd = &cobra.Command{
 			log.Errorf("Error loading settings %v", err)
 			return err
 		}
-		if err := setStorageAccountConnectionString(); err != nil {
+
+		if err := setAzureStorageInfo(); err != nil {
 			log.Errorf("Error setting connection string %v", err)
 			return err
 		}
@@ -68,6 +72,7 @@ var rootCmd = &cobra.Command{
 			log.Errorf("Error validating bundle tag %v", err)
 			return err
 		}
+		az.RPType = requiredSettings["CustomRPType"]
 
 		// TODO need to handle digests and versioning correctly
 		if _, ok := ref.(reference.Tagged); !ok {
@@ -91,10 +96,12 @@ var rootCmd = &cobra.Command{
 
 		log.Debug("Creating Router")
 		router := chi.NewRouter()
+		router.Use(az.ValidateRPType)
+		router.Use(az.Login)
 		router.Use(middleware.RequestID)
 		router.Use(middleware.RealIP)
 		router.Use(middleware.Logger)
-		router.Use(middleware.Timeout(60 * time.Second))
+		router.Use(middleware.Timeout(10 * time.Minute))
 		router.Use(middleware.Recoverer)
 		log.Debug("Creating Handler")
 		router.Handle("/*", handlers.NewCustomResourceHandler())
@@ -137,8 +144,8 @@ func loadSettings() error {
 	return nil
 }
 
-// setStorageAccountConnectionString. The Azure plugin expects the connection string to be set in an environment variable tis function looks up the key for the storage account and sts the variabe
-func setStorageAccountConnectionString() error {
+// setAzureStorageInfo. The Azure plugin expects the connection string to be set in an environment variable , the Azure CNAB Driver requires an account key to access file shares and the storage package requires details of the storage account and tables that are used
+func setAzureStorageInfo() error {
 	var loginInfo az.LoginInfo
 	var err error
 	if loginInfo, err = az.LoginToAzure(); err != nil {
@@ -152,6 +159,11 @@ func setStorageAccountConnectionString() error {
 	os.Setenv(AzureStorageConnectionString, fmt.Sprintf("AccountName=%s;AccountKey=%s", requiredSettings["StorageAccountName"], *(((*result.Keys)[0]).Value)))
 	// this is used by the Azure CNAB Driver
 	os.Setenv(CnabStateStorageAccountKey, *(((*result.Keys)[0]).Value))
+	// these are used by Table Storage functions
+	az.StorageAccountName = requiredSettings["StorageAccountName"]
+	az.StorageAccountKey = *(((*result.Keys)[0]).Value)
+	az.StateTableName = requiredSettings["StateTable"]
+	az.AsyncOperationTableName = requiredSettings["AsyncOpTable"]
 	return nil
 }
 

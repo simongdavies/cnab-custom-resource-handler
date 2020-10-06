@@ -2,12 +2,12 @@ package models
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"get.porter.sh/porter/pkg/porter"
+	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/go-chi/render"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
@@ -23,18 +23,18 @@ type BundleCommandProperties struct {
 	Credentials               map[string]interface{} `json:"credentials"`
 	Parameters                map[string]interface{} `json:"parameters"`
 	*porter.BundlePullOptions `json:"-"`
-	RequestPath               string `json:"-"`
 }
 
 type BundleCommandOutputs struct {
-	Outputs map[string]interface{} `json:"outputs,omitempty"`
+	Outputs map[string]interface{} `json:"properties,omitempty"`
 }
 type RPProperties struct {
-	Id           string `json:"id"`
-	Name         string `json:"name"`
-	Type         string `json:"type"`
-	Installation string `json:"Installation"`
+	Id             string `json:"id"`
+	Name           string `json:"name"`
+	Type           string `json:"type"`
+	SubscriptionId string `json:"-"`
 }
+
 type BundleRP struct {
 	RPProperties
 	Properties *BundleCommandProperties `json:"properties"`
@@ -42,7 +42,7 @@ type BundleRP struct {
 
 type BundleRPOutput struct {
 	*RPProperties
-	Properties *BundleCommandOutputs `json:"properties"`
+	*BundleCommandOutputs
 }
 
 func BundleCtx(next http.Handler) http.Handler {
@@ -73,16 +73,19 @@ func (bundleCommandProperties *BundleCommandProperties) Render(w http.ResponseWr
 
 func (payload *BundleRP) Bind(r *http.Request) error {
 	requestPath := r.Header.Get("x-ms-customproviders-requestpath")
-	if len(requestPath) == 0 {
-		return errors.New("x-ms-customproviders-requestpath missing from request")
+	resource, err := azure.ParseResourceID(requestPath)
+	if err != nil {
+		return fmt.Errorf("Failed to parse x-ms-customproviders-requestpath: %v", err)
 	}
+	if !strings.HasPrefix(requestPath, "/") {
+		requestPath = fmt.Sprintf("%s%s", "/", requestPath)
+	}
+	requestParts := strings.Split(requestPath, "/")
 
-	// TODO update to use SDK
 	payload.Id = requestPath
-	resourceIDParts := strings.Split(requestPath, "/")
-	payload.Name = resourceIDParts[len(resourceIDParts)-1]
-	payload.Type = fmt.Sprintf("%s/%s", resourceIDParts[len(resourceIDParts)-3], resourceIDParts[len(resourceIDParts)-2])
-	payload.Properties.RequestPath = requestPath
+	payload.Name = resource.ResourceName
+	payload.SubscriptionId = resource.SubscriptionID
+	payload.Type = strings.Join(requestParts[6:len(requestParts)-1], "/")
 
 	return nil
 }
