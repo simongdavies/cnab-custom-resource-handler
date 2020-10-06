@@ -25,6 +25,7 @@ bundle.json
 !**/testdata/azuredeploy.json
 !**/testdata/bundle.json
 **/testdata/generated/**
+**/__debug_bin
 
 .vscode
 local.settings.json
