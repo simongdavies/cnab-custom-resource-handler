@@ -11,11 +11,11 @@
     },
     "bundleTag": {
       "type": "string",
-      "defaultValue": "cnabquickstarts.azurecr.io/porter/sql-server-always-on-kubernetes/bundle:0.2.0"
+      "defaultValue": "cnabquickstarts.azurecr.io/porter/sql-server-always-on-kubernetes/bundle:0.2.3"
     },
     "rpName": {
       "type": "string",
-      "defaultValue": "sqlServerAlwaysOn1"
+      "defaultValue": "sqlServerAlwaysOn"
     },
     "debug": {
       "type": "bool",

@@ -7,7 +7,7 @@ import (
 )
 
 type RequestError struct {
-	HTTPStatusCode int    `json:"-"`
+	HTTPStatusCode int    `json:"statuscode"`
 	Status         string `json:"status"`
 	Message        string `json:"error,omitempty"`
 }
@@ -20,12 +20,22 @@ func (e *ErrorResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func ErrorInternalServerErrorFromError(err error) render.Renderer {
+func ErrorInternalServerErrorFromError(err error) *ErrorResponse {
 	return &ErrorResponse{
 		&RequestError{
 			HTTPStatusCode: 500,
 			Status:         "Internal Server Error",
 			Message:        err.Error(),
+		},
+	}
+}
+
+func ErrorConflict(message string) render.Renderer {
+	return &ErrorResponse{
+		&RequestError{
+			HTTPStatusCode: 409,
+			Status:         "Conflict",
+			Message:        message,
 		},
 	}
 }
@@ -39,7 +49,7 @@ func ErrorNotFound() render.Renderer {
 	}
 }
 
-func ErrorInternalServerError(message string) render.Renderer {
+func ErrorInternalServerError(message string) *ErrorResponse {
 	return &ErrorResponse{
 		&RequestError{
 			HTTPStatusCode: 500,

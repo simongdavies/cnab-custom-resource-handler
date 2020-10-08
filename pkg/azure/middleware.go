@@ -6,8 +6,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/go-chi/render"
+	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
+	"github.com/simongdavies/cnab-custom-resource-handler/pkg/models"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -40,11 +44,103 @@ func ValidateRPType(next http.Handler) http.Handler {
 			_ = render.Render(w, r, helpers.ErrorInternalServerError("Header x-ms-customproviders-requestpath missing from request"))
 			return
 		}
+
 		if !strings.HasPrefix(strings.ToLower(strings.TrimPrefix(requestPath, "/")), strings.ToLower(strings.TrimPrefix(RPType, "/"))) {
 			log.Infof("request: %s not for registered RP Type:%s", requestPath, RPType)
 			_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("request: %s not for registered RP Type:%s", requestPath, RPType)))
 			return
 		}
+
+		if strings.Contains(requestPath, "!") {
+			log.Infof("request: %s contains !", requestPath)
+			_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("resource name: %s is not valid ! character is not allowed", requestPath)))
+			return
+		}
+
 		next.ServeHTTP(w, r)
 	})
+}
+
+func LoadState(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		payload := &models.BundleRP{
+			Properties: &models.BundleCommandProperties{},
+		}
+		ctx := context.WithValue(r.Context(), models.BundleContext, payload)
+
+		requestPath := r.Header.Get("x-ms-customproviders-requestpath")
+		resource, err := azure.ParseResourceID(requestPath)
+		if err != nil {
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to parse x-ms-customproviders-requestpath: %v", err)))
+			return
+		}
+		if !strings.HasPrefix(requestPath, "/") {
+			requestPath = fmt.Sprintf("%s%s", "/", requestPath)
+		}
+		log.Debugf("Request path header: %s", requestPath)
+		// List request
+		// TODO get the resource name from a setting
+
+		if r.Method == "GET" && resource.ResourceName == "installs" {
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		properties, err := GetRPState(resource.SubscriptionID, requestPath)
+
+		if err != nil {
+			storageError, ok := err.(storage.AzureStorageServiceError)
+			if !ok || ok && storageError.StatusCode != 404 {
+				_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get RPState: %v", err)))
+				return
+			}
+			if ok && storageError.StatusCode == 404 && r.Method != "PUT" && //Not found is valid for 1st Put (Create)
+				!(r.Method == "GET" && IsOperationsRequest(requestPath)) { // Get on operations will produce not found
+				_ = render.Render(w, r, helpers.ErrorNotFound())
+				return
+			}
+
+		}
+
+		switch r.Method {
+		case "PUT", "POST":
+			{
+				// properties will be nil on first PUT of a resource
+				if properties != nil && !IsTerminalProvisioningState(properties.ProvisioningState) {
+					_ = render.Render(w, r, helpers.ErrorConflict(fmt.Sprintf("Resource Provisioning State is: %s", properties.ProvisioningState)))
+					return
+				}
+			}
+		case "DELETE":
+			{
+				// Deleting is fine if the resource is already being deleted
+				if !IsTerminalProvisioningState(properties.ProvisioningState) && properties.ProvisioningState != helpers.ProvisioningStateDeleting {
+					_ = render.Render(w, r, helpers.ErrorConflict(fmt.Sprintf("Resource Provisioning State is: %s", properties.ProvisioningState)))
+					return
+				}
+			}
+		}
+
+		if properties != nil {
+			payload.Properties.ProvisioningState = properties.ProvisioningState
+			payload.Properties.Credentials = properties.Credentials
+			payload.Properties.Parameters = properties.Parameters
+			payload.Properties.ErrorResponse = properties.ErrorResponse
+			payload.Properties.OperationId = properties.OperationId
+		}
+
+		payload.Properties.BundlePullOptions = common.BundlePullOptions
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+func IsTerminalProvisioningState(provisioningState string) bool {
+	return provisioningState == helpers.ProvisioningStateFailed || provisioningState == helpers.ProvisioningStateSucceeded
+}
+
+func IsOperationsRequest(requestPath string) bool {
+	parts := strings.Split(requestPath, "/")
+	// Operations Request
+	return parts[len(parts)-2] == "operations"
 }

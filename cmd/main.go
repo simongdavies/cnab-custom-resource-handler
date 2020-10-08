@@ -19,6 +19,7 @@ import (
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/handlers"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
+	"github.com/simongdavies/cnab-custom-resource-handler/pkg/jobs"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -94,6 +95,7 @@ var rootCmd = &cobra.Command{
 		}
 		common.RPBundle = bun
 
+		jobs.Start()
 		log.Debug("Creating Router")
 		router := chi.NewRouter()
 		router.Use(az.ValidateRPType)
@@ -111,6 +113,7 @@ var rootCmd = &cobra.Command{
 			log.Errorf("Error running HTTP Server %v", err)
 			return err
 		}
+		jobs.Stop()
 		return nil
 	},
 }

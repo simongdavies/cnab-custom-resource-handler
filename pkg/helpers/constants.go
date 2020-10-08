@@ -7,7 +7,12 @@ import (
 )
 
 const (
-	UserAgentPrefix = "cnab-custom-resource-handler"
+	UserAgentPrefix            = "cnab-custom-resource-handler"
+	ProvisioningStateSucceeded = "Succeeded"
+	ProvisioningStateFailed    = "Failed"
+	ProvisioningStateDeleting  = "Deleting"
+	APIVersion                 = "2018-09-01-preview"
+	AsyncOperationComplete     = "complete"
 )
 
 // Version returns the version string

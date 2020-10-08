@@ -2,25 +2,19 @@ package handlers
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"os"
-	"os/exec"
 	"strings"
 
-	"get.porter.sh/porter/pkg/parameters"
 	az "github.com/Azure/go-autorest/autorest/azure"
-	"github.com/cnabio/cnab-go/credentials"
-	"github.com/cnabio/cnab-go/secrets/host"
-	"github.com/cnabio/cnab-go/valuesource"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
+	"github.com/google/uuid"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/azure"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
+	"github.com/simongdavies/cnab-custom-resource-handler/pkg/jobs"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/models"
 	log "github.com/sirupsen/logrus"
 )
@@ -34,6 +28,7 @@ type porterOutput struct {
 func NewCustomResourceHandler() chi.Router {
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
+	r.Use(azure.LoadState)
 	r.Use(models.BundleCtx)
 	r.Get("/*", getCustomResourceHandler)
 	r.Put("/*", putCustomResourceHandler)
@@ -46,29 +41,54 @@ func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
 	log.Infof("Received GET Request: %s", rpInput.Id)
 
-	if len(rpInput.Name) == 0 {
+	if azure.IsOperationsRequest(rpInput.Id) {
+		getOperationHandler(w, r)
+		return
+	}
+
+	// TODO change to use Custom RP Type name
+	if rpInput.Name == "installs" {
 		listCustomResourceHandler(w, r, rpInput.SubscriptionId)
 		return
 	}
 
 	installationName := getInstallationName(rpInput.Id)
 
-	//TODO need to handle a get on a resource that has an operation in progress
-	// _, err := azure.GetRPState(rpInput.SubscriptionId, rpInput.Id)
-	// if err != nil {
-	// 	_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get RP state: %v", err)))
-	// 	return
-	// }
+	// The last attempt to update the resource failed
 
-	if exists, err := checkIfInstallationExists(installationName); err != nil {
-		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
-		return
-	} else if !exists {
-		w.WriteHeader(http.StatusNotFound)
+	if rpInput.Properties.ProvisioningState == helpers.ProvisioningStateFailed && rpInput.Properties.ErrorResponse != nil {
+		output := make(map[string]interface{})
+		output["ProvisioningState"] = rpInput.Properties.ProvisioningState
+		output["Error"] = rpInput.Properties.ErrorResponse.RequestError.Message
+		rpOutput := models.BundleRPOutput{
+			RPProperties: &models.RPProperties{
+				Type: rpInput.Type,
+				Id:   rpInput.Id,
+				Name: rpInput.Name,
+			},
+			BundleCommandOutputs: &models.BundleCommandOutputs{
+				Outputs: output,
+			},
+		}
+		_ = render.Render(w, r, &rpOutput)
 		return
 	}
 
-	rpOutput, err := getRPOutput(installationName, rpInput)
+	// The resource is not in a terminal state
+
+	if azure.IsTerminalProvisioningState(rpInput.Properties.ProvisioningState) {
+		if exists, err := checkIfInstallationExists(installationName); err != nil {
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
+			return
+		} else if !exists {
+			// This can only happen if the installation was deleted outside of the RP
+			// TODO clean up state
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+	}
+
+	rpOutput, err := getRPOutput(installationName, rpInput, rpInput.Properties.ProvisioningState)
 	if err != nil {
 		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed getRPOutput: %v", err)))
 		return
@@ -86,122 +106,108 @@ func listCustomResourceHandler(w http.ResponseWriter, r *http.Request, subscript
 
 	list := make([]*models.BundleRPOutput, 0)
 	for _, v := range res.Entities {
-
-		resource, err := az.ParseResourceID(v.RowKey)
+		id := azure.GetResourceIdFromRowKey(v.RowKey)
+		resource, err := az.ParseResourceID(id)
 		if err != nil {
-
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to parse resourceId %s: %v", v.RowKey, err)))
 			return
 		}
-		requestParts := strings.Split(v.RowKey, "/")
+		requestParts := strings.Split(id, "/")
 		output := models.BundleRPOutput{
 			RPProperties: &models.RPProperties{
 				Type: strings.Join(requestParts[6:len(requestParts)-1], "/"),
-				Id:   v.RowKey,
+				Id:   id,
 				Name: resource.ResourceName,
 			},
 		}
 		list = append(list, &output)
-		render.DefaultResponder(w, r, list)
 	}
+	render.DefaultResponder(w, r, list)
 }
 
 func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
+
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
 	log.Infof("Received PUT Request: %s", rpInput.Id)
 	installationName := getInstallationName(rpInput.Id)
-	var args []string
-	dir, err := ioutil.TempDir("", "")
-	if err != nil {
-		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("error creating temp dir: %v", err)))
-		return
-	}
-	defer os.RemoveAll(dir)
 
 	action := "install"
+	provisioningState := "Installing"
 	if exists, err := checkIfInstallationExists(installationName); err != nil {
 		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
 		return
 	} else if exists {
 		action = "upgrade"
+		provisioningState = "Upgrading"
 	}
 
+	var args []string
 	args = append(args, action, installationName, "--tag", rpInput.Properties.BundlePullOptions.Tag)
 
 	if len(rpInput.Properties.Parameters) > 0 {
-		paramFile, err := writeParametersFile(rpInput.Properties.Parameters, dir)
-		if err != nil {
-			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(err))
+		if err := validateParameters(rpInput.Properties.Parameters); err != nil {
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to validate parameters:%v", err)))
 			return
 		}
-		args = append(args, "-p", paramFile.Name())
-		defer os.Remove(paramFile.Name())
 	}
 
 	if len(rpInput.Properties.Credentials) > 0 {
-		credFile, err := writeCredentialsFile(rpInput.Properties.Credentials, dir)
-		if err != nil {
-			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(err))
+		if err := validateCredentials(rpInput.Properties.Credentials); err != nil {
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to validate credentials:%v", err)))
 			return
 		}
-		args = append(args, "-c", credFile.Name())
-		defer os.Remove(credFile.Name())
 	}
 
-	if out, err := executePorterCommand(args); err != nil {
-		_ = render.Render(w, r, helpers.ErrorInternalServerError(string(out)))
-		return
+	jobData := jobs.PutJobData{
+		RPInput:          rpInput,
+		Args:             args,
+		InstallationName: installationName,
 	}
 
+	jobs.PutJobs <- &jobData
+
+	rpInput.Properties.ProvisioningState = provisioningState
 	if err := azure.PutRPState(rpInput.SubscriptionId, rpInput.Id, rpInput.Properties); err != nil {
-		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to save RP state from put: %v", err)))
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to update state:%v", err)))
 		return
 	}
 
-	rpOutput, err := getRPOutput(installationName, rpInput)
+	rpOutput, err := getRPOutput(installationName, rpInput, provisioningState)
 	if err != nil {
-		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed getRPOutput: %v", err)))
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get RP output:%v", err)))
 		return
 	}
 
+	status := http.StatusCreated
+	if action == "upgrade" {
+		status = http.StatusOK
+	}
+
+	render.Status(r, status)
 	render.DefaultResponder(w, r, rpOutput)
+
 }
 
-func writeParametersFile(params map[string]interface{}, dir string) (*os.File, error) {
-
-	if err := validateParameters(params); err != nil {
-		return nil, err
-	}
-
-	ps := parameters.NewParameterSet("parameter-set")
-	for k, v := range params {
-		vs, err := setupArg(k, v, len(common.RPBundle.Parameters[k].Destination.Path) > 0, dir)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to set up parameter: %v", err)
-		}
-		ps.Parameters = append(ps.Parameters, *vs)
-	}
-
-	return writeFile(ps)
-}
-
-func getRPOutput(installationName string, rpInput *models.BundleRP) (*models.BundleRPOutput, error) {
-
-	args := []string{}
-	args = append(args, "installations", "output", "list", "-i", installationName)
-	out, err := executePorterCommand(args)
-	if err != nil {
-		return nil, err
-	}
+func getRPOutput(installationName string, rpInput *models.BundleRP, provisioningState string) (*models.BundleRPOutput, error) {
 
 	var cmdOutput []porterOutput
-	if err := json.Unmarshal(out, &cmdOutput); err != nil {
-		return nil, fmt.Errorf("Failed to read json from command: %v", err)
+
+	if provisioningState == helpers.ProvisioningStateSucceeded {
+		args := []string{}
+		args = append(args, "installations", "output", "list", "-i", installationName)
+		out, err := helpers.ExecutePorterCommand(args)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := json.Unmarshal(out, &cmdOutput); err != nil {
+			return nil, fmt.Errorf("Failed to read json from command: %v", err)
+		}
 	}
 
 	output := make(map[string]interface{})
 
-	output["ProvisioningState"] = "Succeeded"
+	output["ProvisioningState"] = provisioningState
 	output["Installation"] = installationName
 	for _, v := range cmdOutput {
 		log.Debugf("Installation Name:%s Output:%s", installationName, v.Name)
@@ -225,24 +231,6 @@ func getRPOutput(installationName string, rpInput *models.BundleRP) (*models.Bun
 		},
 	}
 	return &rpOutput, nil
-}
-
-func writeCredentialsFile(creds map[string]interface{}, dir string) (*os.File, error) {
-
-	if err := validateCredentials(creds); err != nil {
-		return nil, err
-	}
-
-	cs := credentials.NewCredentialSet("credential-set")
-	for k, v := range creds {
-		vs, err := setupArg(k, v, len(common.RPBundle.Credentials[k].Path) > 0, dir)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to set up credential: %v", err)
-		}
-		cs.Credentials = append(cs.Credentials, *vs)
-	}
-
-	return writeFile(cs)
 }
 
 func validateCredentials(creds map[string]interface{}) error {
@@ -285,139 +273,81 @@ func validateParameters(params map[string]interface{}) error {
 	return nil
 }
 
-func setupArg(key string, value interface{}, isFile bool, dir string) (*valuesource.Strategy, error) {
-	name := getEnvVarName(key)
-	val := fmt.Sprintf("%v", value)
-	c := valuesource.Strategy{Name: key}
-
-	if isFile {
-		// File data should be encoded as base64
-		file, err := ioutil.TempFile(dir, "cnab*")
-		if err != nil {
-			return nil, fmt.Errorf("Failed to create temp file for %s :%v", key, err)
-		}
-		c.Source.Key = host.SourcePath
-		data, err := base64.StdEncoding.DecodeString(val)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to decode data for %s :%v", key, err)
-		}
-		if _, err := file.Write(data); err != nil {
-			return nil, fmt.Errorf("Failed to write date to file for %s :%v", key, err)
-		}
-		c.Source.Value = file.Name()
-	} else {
-		c.Source.Key = host.SourceEnv
-		c.Source.Value = name
-		os.Setenv(name, val)
-	}
-	return &c, nil
-}
-
-func writeFile(filedata interface{}) (*os.File, error) {
-	file, err := ioutil.TempFile("", "cnab*")
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create temp file:%v", err)
-	}
-
-	data, err := json.Marshal(filedata)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to marshal data to json:%v", err)
-	}
-
-	_, err = file.Write(data)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to write json to file %s error:%v", file.Name(), err)
-	}
-
-	return file, nil
-}
-
-func getEnvVarName(name string) string {
-	return strings.ToUpper(strings.Replace(name, "-", "_", -1))
-}
-
 func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Received Request: %s", r.RequestURI)
 	render.DefaultResponder(w, r, fmt.Sprintf("Post Hello World!! from %s", r.RequestURI))
 }
 
-//TODO handle async operations
 func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
-	log.Infof("Received DELETE Request: %s", rpInput.Id)
-	installationName := getInstallationName(rpInput.Id)
-	var args []string
+	guid := rpInput.Properties.OperationId
+	if rpInput.Properties.ProvisioningState != helpers.ProvisioningStateDeleting {
 
-	if exists, err := checkIfInstallationExists(installationName); err != nil {
-		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
-		return
-	} else if !exists {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	dir, err := ioutil.TempDir("", "")
-	if err != nil {
-		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("error creating temp dir: %v", err)))
-		return
-	}
-	defer os.RemoveAll(dir)
-
-	properties, err := azure.GetRPState(rpInput.SubscriptionId, rpInput.Id)
-	if err != nil {
-		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get RPState for Delete: %v", err)))
-		return
-	}
-
-	rpInput.Properties = properties
-
-	args = append(args, "uninstall", installationName, "--delete", "--tag", rpInput.Properties.BundlePullOptions.Tag)
-
-	if len(rpInput.Properties.Parameters) > 0 {
-		paramFile, err := writeParametersFile(rpInput.Properties.Parameters, dir)
-		if err != nil {
-			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(err))
+		installationName := getInstallationName(rpInput.Id)
+		var args []string
+		if exists, err := checkIfInstallationExists(installationName); err != nil {
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
+			return
+		} else if !exists {
+			// This should only happen if the resource is deleted outside of ARM
+			// TODO clean-up state
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		args = append(args, "-p", paramFile.Name())
-		defer os.Remove(paramFile.Name())
-	}
 
-	if len(rpInput.Properties.Credentials) > 0 {
-		credFile, err := writeCredentialsFile(rpInput.Properties.Credentials, dir)
-		if err != nil {
-			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(err))
+		guid = uuid.New().String()
+		rpInput.Properties.ProvisioningState = helpers.ProvisioningStateDeleting
+		rpInput.Properties.OperationId = guid
+		jobData := jobs.DeleteJobData{
+			RPInput:          rpInput,
+			Args:             args,
+			InstallationName: installationName,
+			OperationId:      guid,
+		}
+
+		jobs.DeleteJobs <- &jobData
+
+		if err := azure.PutRPState(rpInput.SubscriptionId, rpInput.Id, rpInput.Properties); err != nil {
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to update state:%v", err)))
 			return
 		}
-		args = append(args, "-c", credFile.Name())
-		defer os.Remove(credFile.Name())
+		if err := azure.PutAsyncOp(rpInput.SubscriptionId, guid, "delete", helpers.ProvisioningStateDeleting); err != nil {
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to update asyncop %s :%v", guid, err)))
+			return
+		}
+
 	}
 
-	out, err := executePorterCommand(args)
-	if err != nil {
-		_ = render.Render(w, r, helpers.ErrorInternalServerError(string(out)))
-		return
-	}
-	render.Status(r, http.StatusOK)
+	w.Header().Add("Retry-After", "60")
+	w.Header().Add("Location", fmt.Sprintf("https://management.azure.com%s/operations/%s&api-version=%s", rpInput.Id, guid, helpers.APIVersion))
+	w.WriteHeader(http.StatusAccepted)
+
 }
 
-func executePorterCommand(args []string) ([]byte, error) {
-	if isDriverCommand(args[0]) {
-		args = append(args, "--driver", "azure")
-	}
+func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 
-	if isOutputCommand(args[0]) {
-		args = append(args, "--output", "json")
-	}
+	// TODO validate the operation Id
 
-	log.Debugf("porter %v", args)
-	out, err := exec.Command("porter", args...).CombinedOutput()
+	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
+
+	state, err := azure.GetAsyncOp(rpInput.SubscriptionId, rpInput.Name)
 	if err != nil {
-		log.Debugf("Command failed Error:%v Output: %s", err, string(out))
-		return out, fmt.Errorf("Porter command failed: %v", err)
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get async op %s :%v", rpInput.Name, err)))
+		return
+	}
+	if state.Action == "delete" && state.Status != helpers.ProvisioningStateDeleting {
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Unexpected status for delete action %s :%v", rpInput.Name, err)))
+		return
+	}
+	if state.Status == helpers.AsyncOperationComplete {
+		w.WriteHeader(http.StatusOK)
+		return
 	}
 
-	return out, nil
+	w.Header().Add("Retry-After", "60")
+	w.Header().Add("Location", fmt.Sprintf("https://management.azure.com%s&api-version=%s", rpInput.Id, helpers.APIVersion))
+	w.WriteHeader(http.StatusAccepted)
+
 }
 
 func getInstallationName(requestPath string) string {
@@ -430,19 +360,11 @@ func getInstallationName(requestPath string) string {
 func checkIfInstallationExists(name string) (bool, error) {
 	args := []string{}
 	args = append(args, "installations", "show", name)
-	if out, err := executePorterCommand(args); err != nil {
+	if out, err := helpers.ExecutePorterCommand(args); err != nil {
 		if strings.Contains(strings.ToLower(string(out)), "installation does not exist") {
 			return false, nil
 		}
 		return false, err
 	}
 	return true, nil
-}
-
-func isDriverCommand(cmd string) bool {
-	return strings.Contains("installupgradeuninstallaction", cmd)
-}
-
-func isOutputCommand(cmd string) bool {
-	return cmd == "installations"
 }

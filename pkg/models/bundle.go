@@ -22,7 +22,11 @@ const BundleContext ContextKey = "bundle"
 type BundleCommandProperties struct {
 	Credentials               map[string]interface{} `json:"credentials"`
 	Parameters                map[string]interface{} `json:"parameters"`
+	ErrorResponse             *helpers.ErrorResponse `json:"-"`
 	*porter.BundlePullOptions `json:"-"`
+	ProvisioningState         string `json:"-"`
+	OperationId               string `json:"-"`
+	Error                     string `json:"error,omitempty"`
 }
 
 type BundleCommandOutputs struct {
@@ -47,14 +51,18 @@ type BundleRPOutput struct {
 
 func BundleCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload := r.Context().Value(BundleContext).(*BundleRP)
 
-		payload := &BundleRP{
-			Properties: &BundleCommandProperties{},
-		}
-
-		if err := render.Bind(r, payload); err != nil {
-			_ = render.Render(w, r, helpers.ErrorInvalidRequestFromError(err))
-			return
+		if r.ContentLength != 0 {
+			if err := render.Bind(r, payload); err != nil {
+				_ = render.Render(w, r, helpers.ErrorInvalidRequestFromError(err))
+				return
+			}
+		} else {
+			if err := payload.setResource(r); err != nil {
+				_ = render.Render(w, r, helpers.ErrorInvalidRequestFromError(err))
+				return
+			}
 		}
 
 		ctx := context.WithValue(r.Context(), BundleContext, payload)
@@ -72,6 +80,10 @@ func (bundleCommandProperties *BundleCommandProperties) Render(w http.ResponseWr
 }
 
 func (payload *BundleRP) Bind(r *http.Request) error {
+	return payload.setResource(r)
+}
+
+func (payload *BundleRP) setResource(r *http.Request) error {
 	requestPath := r.Header.Get("x-ms-customproviders-requestpath")
 	resource, err := azure.ParseResourceID(requestPath)
 	if err != nil {
