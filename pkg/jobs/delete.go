@@ -106,7 +106,7 @@ func deleteJob(jobData *DeleteJobData) {
 		}
 	}
 
-	if err := azure.PutAsyncOp(jobData.RPInput.SubscriptionId, jobData.RPInput.Properties.OperationId, "delete", helpers.AsyncOperationComplete); err != nil {
+	if err := azure.PutAsyncOp(jobData.RPInput.SubscriptionId, jobData.OperationId, "delete", helpers.AsyncOperationComplete); err != nil {
 		log.Debugf("Failed to update async op for %s error: %v", jobData.RPInput.Id, err)
 		return
 	}

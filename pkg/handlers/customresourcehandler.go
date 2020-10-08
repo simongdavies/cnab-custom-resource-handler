@@ -335,8 +335,8 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get async op %s :%v", rpInput.Name, err)))
 		return
 	}
-	if state.Action == "delete" && state.Status != helpers.ProvisioningStateDeleting {
-		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Unexpected status for delete action %s :%v", rpInput.Name, err)))
+	if state.Action == "delete" && (state.Status != helpers.ProvisioningStateDeleting && state.Status != helpers.AsyncOperationComplete) {
+		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Unexpected status for delete action op id %s :%v", rpInput.Name, state.Status)))
 		return
 	}
 	if state.Status == helpers.AsyncOperationComplete {
