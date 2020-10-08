@@ -34,8 +34,8 @@
     "roleAssignmentId": "[guid(concat(resourceGroup().id,variables('msi_name'), 'contributor'))]",
     "storage_location": "canadacentral",
     "endPointDNSName": "[replace(concat(variables('cnab_azure_state_fileshare'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io'),'-','')]",
-    "stateTableName": "[concat(variables('cnab_azure_state_storage_account_name'), '/default/installstate')]",
-    "aysncOpTableName": "[concat(variables('cnab_azure_state_storage_account_name'), '/default/asyncops')]",
+    "stateTableName": "installstate",
+    "aysncOpTableName": "asyncops",
     "rpTypeName":"installs"
   },
   "resources": [
@@ -111,7 +111,7 @@
       ]
     },
     {
-      "name": "[variables('stateTableName')]",
+      "name": "[concat(variables('cnab_azure_state_storage_account_name'),'/default/',variables('stateTableName'))]",
       "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
       "apiVersion": "2019-06-01",
       "dependsOn": [
@@ -119,7 +119,7 @@
       ]
     },
     {
-      "name": "[variables('aysncOpTableName')]",
+      "name": "[concat(variables('cnab_azure_state_storage_account_name'),'/default/',variables('aysncOpTableName'))]",
       "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
       "apiVersion": "2019-06-01",
       "dependsOn": [
@@ -215,7 +215,7 @@
                   "value": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('cnab_azure_state_storage_account_name')), '2019-04-01').keys[0].value]"
                 },
                 {
-                  "name": "CNAB_AZURE_STATE_STORAGE_FILESHARE",
+                  "name": "CNAB_AZURE_STATE_FILESHARE",
                   "value": "[variables('cnab_azure_state_fileshare')]"
                 },
                 {

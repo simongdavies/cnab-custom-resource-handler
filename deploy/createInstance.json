@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "password": {
+      "type": "securestring"
+    },
+    "aks-cluster": {
+      "type": "string"
+    },
+    "aks-cluster-resource-group": {
+      "type": "string"
+    },
+    "kubernetes-namespace": {
+      "type": "string"
+    },
+    "sql-ag-name": {
+      "type": "string"
+    },
+    "install_name": {
+      "type": "string"
+    }
+  },
+  "variables": {
+  },
+  "resources": [
+    {
+      "type": "Microsoft.CustomProviders/resourceProviders/installs",
+      "apiVersion": "2018-09-01-preview",
+      "name": "[concat('sqlServerAlwaysOn/',parameters('install_name'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "credentials": {
+          "kubeconfig": "[listClusterAdminCredential(resourceId(subscription().subscriptionId,parameters('aks-cluster-resource-group'),'Microsoft.ContainerService/managedClusters',parameters('aks-cluster')), '2020-09-01').kubeconfigs[0].value]",
+          "sql_masterkeypassword": "[parameters('password')]",
+          "sql_sapassword": "[parameters('password')]"
+        },
+        "parameters": {
+          "availabilitygroupname": "[parameters('sql-ag-name')]",
+          "namespace": "[parameters('kubernetes-namespace')]"
+        }
+      }
+    }
+  ]
+}
