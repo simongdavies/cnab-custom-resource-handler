@@ -252,7 +252,7 @@
                 },
                 {
                   "name": "CUSTOM_RP_TYPE",
-                  "value": "[resourceId('Microsoft.CustomProviders/resourceProviders',parameters('rpName'),variables('rpTypeName'))]"
+                  "value": "[concat(resourceId('Microsoft.CustomProviders/resourceProviders',parameters('rpName')),variables('rpTypeName'))]"
                 }
               ],
               "command": "[if(parameters('debug'),json('[\"/cnabcustomrphandler\",\"--debug\"]'),json('[\"/cnabcustomrphandler\"]'))]",

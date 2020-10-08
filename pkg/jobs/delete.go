@@ -39,6 +39,7 @@ func deleteJob(jobData *DeleteJobData) {
 
 	//TODO retry delete with last used Tag in case of errors
 	log.Debugf("Started processing DELETE request for %s", jobData.RPInput.Id)
+	jobData.RPInput.Properties.ProvisioningState = helpers.ProvisioningStateFailed
 
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {

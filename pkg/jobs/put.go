@@ -39,7 +39,7 @@ func putJob(data *PutJobData) {
 	log.Debugf("Started processing PUT request for %s", data.RPInput.Id)
 
 	//TODO Implement Timeouts
-
+	data.RPInput.Properties.ProvisioningState = helpers.ProvisioningStateFailed
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
 		responseError := helpers.ErrorInternalServerErrorFromError(fmt.Errorf("error creating temp dir: %v", err))
@@ -85,6 +85,7 @@ func putJob(data *PutJobData) {
 	}
 	data.RPInput.Properties.ProvisioningState = helpers.ProvisioningStateSucceeded
 	if err := azure.PutRPState(data.RPInput.SubscriptionId, data.RPInput.Id, data.RPInput.Properties); err != nil {
+		data.RPInput.Properties.ProvisioningState = helpers.ProvisioningStateFailed
 		responseError := helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to save RP state from put: %v", err))
 		if err := azure.MergeRPState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
 			log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
