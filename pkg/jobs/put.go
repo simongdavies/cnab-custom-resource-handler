@@ -43,7 +43,7 @@ func putJob(data *PutJobData) {
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
 		responseError := helpers.ErrorInternalServerErrorFromError(fmt.Errorf("error creating temp dir: %v", err))
-		if err := azure.MergeRPState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
+		if err := azure.SetFailedProvisioningState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
 			log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 		}
 		return
@@ -54,7 +54,7 @@ func putJob(data *PutJobData) {
 		paramFile, err := common.WriteParametersFile(data.RPInput.Properties.Parameters, dir)
 		if err != nil {
 			responseError := helpers.ErrorInternalServerErrorFromError(err)
-			if err := azure.MergeRPState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
+			if err := azure.SetFailedProvisioningState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
 				log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 			}
 			return
@@ -67,7 +67,7 @@ func putJob(data *PutJobData) {
 		credFile, err := common.WriteCredentialsFile(data.RPInput.Properties.Credentials, dir)
 		if err != nil {
 			responseError := helpers.ErrorInternalServerErrorFromError(err)
-			if err := azure.MergeRPState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
+			if err := azure.SetFailedProvisioningState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
 				log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 			}
 			return
@@ -78,7 +78,7 @@ func putJob(data *PutJobData) {
 
 	if out, err := helpers.ExecutePorterCommand(data.Args); err != nil {
 		responseError := helpers.ErrorInternalServerError(string(out))
-		if err := azure.MergeRPState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
+		if err := azure.SetFailedProvisioningState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
 			log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 		}
 		return
@@ -87,7 +87,7 @@ func putJob(data *PutJobData) {
 	if err := azure.PutRPState(data.RPInput.SubscriptionId, data.RPInput.Id, data.RPInput.Properties); err != nil {
 		data.RPInput.Properties.ProvisioningState = helpers.ProvisioningStateFailed
 		responseError := helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to save RP state from put: %v", err))
-		if err := azure.MergeRPState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
+		if err := azure.SetFailedProvisioningState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
 			log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 		}
 	}

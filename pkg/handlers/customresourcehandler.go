@@ -274,8 +274,80 @@ func validateParameters(params map[string]interface{}, action string) error {
 }
 
 func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
-	log.Infof("Received Request: %s", r.RequestURI)
-	render.DefaultResponder(w, r, fmt.Sprintf("Post Hello World!! from %s", r.RequestURI))
+	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
+	log.Infof("Received POST Request: %s", rpInput.Id)
+
+	guid := rpInput.Properties.OperationId
+	action := getAction(rpInput.Id)
+	status := fmt.Sprintf("Running%s", action)
+
+	if rpInput.Properties.ProvisioningState == helpers.ProvisioningStateSucceeded && len(rpInput.Properties.Status) == 0 {
+		installationName := getInstallationName(rpInput.Id)
+
+		if exists, err := checkIfInstallationExists(installationName); err != nil {
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
+			return
+		} else if !exists {
+			// This should only happen if the resource is deleted outside of ARM
+			// TODO clean-up state
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		var args []string
+		args = append(args, "invoke", installationName, "--action", action)
+
+		if len(rpInput.Properties.Parameters) > 0 {
+			if err := validateParameters(rpInput.Properties.Parameters, action); err != nil {
+				_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to validate parameters:%v", err)))
+				return
+			}
+		}
+
+		if len(rpInput.Properties.Credentials) > 0 {
+			if err := validateCredentials(rpInput.Properties.Credentials); err != nil {
+				_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to validate credentials:%v", err)))
+				return
+			}
+		}
+		guid = uuid.New().String()
+
+		postData := jobs.PostJobData{
+			RPInput:          rpInput,
+			Args:             args,
+			InstallationName: installationName,
+			OperationId:      guid,
+			Action:           action,
+		}
+
+		jobs.PostJobs <- &postData
+
+		rpInput.Properties.Status = status
+		if err := azure.PutRPState(rpInput.SubscriptionId, rpInput.Id, rpInput.Properties); err != nil {
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to update state:%v", err)))
+			return
+		}
+
+		if err := azure.PutAsyncOp(rpInput.SubscriptionId, guid, action, status, nil); err != nil {
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to update async op %s :%v", guid, err)))
+			return
+		}
+
+	}
+
+	if !strings.EqualFold(status, rpInput.Properties.Status) {
+		_ = render.Render(w, r, helpers.ErrorConflict(fmt.Sprintf("Cannot start action %s while status is %s", action, rpInput.Properties.Status)))
+		return
+	}
+
+	w.Header().Add("Retry-After", "60")
+	w.Header().Add("Location", fmt.Sprintf("https://management.azure.com%s/operations/%s&api-version=%s", rpInput.Id, guid, helpers.APIVersion))
+	w.WriteHeader(http.StatusAccepted)
+
+}
+
+func getAction(requestPath string) string {
+	return strings.Split(requestPath, "/")[len(requestPath)-1]
 }
 
 func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
@@ -311,7 +383,7 @@ func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to update state:%v", err)))
 			return
 		}
-		if err := azure.PutAsyncOp(rpInput.SubscriptionId, guid, "delete", helpers.ProvisioningStateDeleting); err != nil {
+		if err := azure.PutAsyncOp(rpInput.SubscriptionId, guid, "delete", helpers.ProvisioningStateDeleting, nil); err != nil {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to update asyncop %s :%v", guid, err)))
 			return
 		}
@@ -339,8 +411,28 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Unexpected status for delete action op id %s :%v", rpInput.Name, state.Status)))
 		return
 	}
+	if state.Action != "delete" && (!strings.EqualFold(state.Status, fmt.Sprintf("Running%s", state.Action)) && state.Status != helpers.AsyncOperationComplete) {
+		if state.Output != nil {
+			render.Status(r, http.StatusInternalServerError)
+			render.DefaultResponder(w, r, state.Output)
+		} else {
+			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Unexpected status for action %s op id %s :%v", state.Action, rpInput.Name, state.Status)))
+		}
+		return
+	}
+
 	if state.Status == helpers.AsyncOperationComplete {
-		w.WriteHeader(http.StatusOK)
+		if state.Action == "delete" {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			if state.Output != nil {
+				render.Status(r, http.StatusOK)
+				render.DefaultResponder(w, r, state.Output)
+			} else {
+				w.WriteHeader(http.StatusNoContent)
+			}
+
+		}
 		return
 	}
 

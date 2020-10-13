@@ -11,6 +11,8 @@ const (
 	ProvisioningStateSucceeded = "Succeeded"
 	ProvisioningStateFailed    = "Failed"
 	ProvisioningStateDeleting  = "Deleting"
+	StatusSucceeded            = "Succeeded"
+	StatusFailed               = "Failed"
 	APIVersion                 = "2018-09-01-preview"
 	AsyncOperationComplete     = "complete"
 )

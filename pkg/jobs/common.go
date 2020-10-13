@@ -10,10 +10,12 @@ func Start() {
 	log.Debug("Starting Jobs")
 	startPutJob()
 	startDeleteJob()
+	startPostJob()
 }
 
 func Stop() {
 	log.Debug("Stopping Jobs")
 	close(PutJobs)
 	close(DeleteJobs)
+	close(PostJobs)
 }

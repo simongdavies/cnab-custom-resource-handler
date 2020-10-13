@@ -28,11 +28,11 @@
     "msi_name": "cnabcustomrp",
     "roleAssignmentId": "[guid(concat(resourceGroup().id,variables('msi_name'), 'contributor'))]",
     "storage_location": "canadacentral",
-    "endPointDNSPrefix":"[replace(variables('cnab_azure_state_fileshare'),'-','')]",
+    "endPointDNSPrefix": "[replace(variables('cnab_azure_state_fileshare'),'-','')]",
     "endPointDNSName": "[concat(variables('endPointDNSPrefix'),'.',tolower(replace(parameters('location'),' ','')),'.azurecontainer.io')]",
     "stateTableName": "installstate",
     "aysncOpTableName": "asyncops",
-    "rpTypeName":"installs"
+    "rpTypeName": "installs"
   },
   "resources": [
     {
@@ -222,7 +222,7 @@
                   "name": "CNAB_BUNDLE_TAG",
                   "value": "[parameters('bundleTag')]"
                 },
-                                {
+                {
                   "name": "CNAB_AZURE_RESOURCE_GROUP",
                   "value": "[resourceGroup().name]"
                 },
@@ -326,6 +326,13 @@
         "cnab-custom-resource"
       ],
       "properties": {
+        "actions": [
+          {
+            "name": "createdatabase",
+            "routingType": "Proxy",
+            "endpoint": "[concat('https://',variables('endPointDNSName'))]"
+          }
+        ],
         "resourceTypes": [
           {
             "name": "[variables('rpTypeName')]",

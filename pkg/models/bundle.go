@@ -27,6 +27,7 @@ type BundleCommandProperties struct {
 	ProvisioningState         string `json:"-"`
 	OperationId               string `json:"-"`
 	Error                     string `json:"error,omitempty"`
+	Status                    string `json:"status,omitempty"`
 }
 
 type BundleCommandOutputs struct {

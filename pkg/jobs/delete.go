@@ -44,7 +44,7 @@ func deleteJob(jobData *DeleteJobData) {
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
 		responseError := helpers.ErrorInternalServerErrorFromError(fmt.Errorf("error creating temp dir: %v", err))
-		if err := azure.MergeRPState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
+		if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
 			log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 		}
 		return
@@ -54,7 +54,7 @@ func deleteJob(jobData *DeleteJobData) {
 	properties, err := azure.GetRPState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id)
 	if err != nil {
 		responseError := helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get RPState for Delete: %v", err))
-		if err := azure.MergeRPState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
+		if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
 			log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 		}
 		return
@@ -68,7 +68,7 @@ func deleteJob(jobData *DeleteJobData) {
 		paramFile, err := common.WriteParametersFile(jobData.RPInput.Properties.Parameters, dir)
 		if err != nil {
 			responseError := helpers.ErrorInternalServerErrorFromError(err)
-			if err := azure.MergeRPState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
+			if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
 				log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 			}
 			return
@@ -81,7 +81,7 @@ func deleteJob(jobData *DeleteJobData) {
 		credFile, err := common.WriteCredentialsFile(jobData.RPInput.Properties.Credentials, dir)
 		if err != nil {
 			responseError := helpers.ErrorInternalServerErrorFromError(err)
-			if err := azure.MergeRPState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
+			if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
 				log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 			}
 			return
@@ -93,7 +93,7 @@ func deleteJob(jobData *DeleteJobData) {
 	out, err := helpers.ExecutePorterCommand(jobData.Args)
 	if err != nil {
 		responseError := helpers.ErrorInternalServerError(string(out))
-		if err := azure.MergeRPState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
+		if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
 			log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 		}
 		return
@@ -101,12 +101,12 @@ func deleteJob(jobData *DeleteJobData) {
 
 	if err := azure.DeleteRPState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id); err != nil {
 		responseError := helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to delete RP state for %s error: %v", jobData.RPInput.Id, err))
-		if err := azure.MergeRPState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
+		if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
 			log.Debugf("Failed to Delete RP State for response error %v: %v", responseError, err)
 		}
 	}
 
-	if err := azure.PutAsyncOp(jobData.RPInput.SubscriptionId, jobData.OperationId, "delete", helpers.AsyncOperationComplete); err != nil {
+	if err := azure.PutAsyncOp(jobData.RPInput.SubscriptionId, jobData.OperationId, "delete", helpers.AsyncOperationComplete, nil); err != nil {
 		log.Debugf("Failed to update async op for %s error: %v", jobData.RPInput.Id, err)
 		return
 	}

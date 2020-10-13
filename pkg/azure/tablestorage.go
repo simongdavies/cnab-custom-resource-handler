@@ -27,6 +27,7 @@ type RPState struct {
 type AsyncOperationState struct {
 	Action string
 	Status string
+	Output interface{}
 }
 
 func getTableServiceClient() (*storage.TableServiceClient, error) {
@@ -119,6 +120,7 @@ func PutRPState(partitionKey string, resourceId string, properties *models.Bundl
 	p["OperationId"] = properties.OperationId
 	p["RPType"] = RPType
 	p["ErrorResponse"] = nil
+	p["Status"] = properties.Status
 	row.Properties = p
 	guid := uuid.New().String()
 	options := storage.EntityOptions{
@@ -147,7 +149,7 @@ func DeleteRPState(partitionKey string, resourceId string) error {
 	return row.Delete(true, &options)
 }
 
-func MergeRPState(partitionKey string, resourceId string, errorResponse *helpers.ErrorResponse) error {
+func SetFailedProvisioningState(partitionKey string, resourceId string, errorResponse *helpers.ErrorResponse) error {
 	client, err := getTableServiceClient()
 	if err != nil {
 		return err
@@ -168,9 +170,32 @@ func MergeRPState(partitionKey string, resourceId string, errorResponse *helpers
 		Timeout:   timeout,
 		RequestID: guid,
 	}
-	log.Debugf("Merge RP State for parition key: %s row key: %s id: %s", partitionKey, rowkey, guid)
+	log.Debugf("SetFailedProvisioningState for parition key: %s row key: %s id: %s", partitionKey, rowkey, guid)
 	if err = row.Merge(true, &options); err != nil {
-		return fmt.Errorf("Failed to merge ErrorResponse:%v", err)
+		return fmt.Errorf("Failed to SetFailedProvisioningState ErrorResponse:%v", err)
+	}
+	return nil
+}
+
+func UpdateRPStatus(partitionKey string, resourceId string, status string) error {
+	client, err := getTableServiceClient()
+	if err != nil {
+		return err
+	}
+	rowkey := getRowKeyFromResourceId(resourceId)
+	table := client.GetTableReference(StateTableName)
+	row := table.GetEntityReference(partitionKey, rowkey)
+	p := make(map[string]interface{})
+	p["Status"] = status
+	row.Properties = p
+	guid := uuid.New().String()
+	options := storage.EntityOptions{
+		Timeout:   timeout,
+		RequestID: guid,
+	}
+	log.Debugf("Update RP status for parition key: %s row key: %s id: %s", partitionKey, rowkey, guid)
+	if err = row.Merge(true, &options); err != nil {
+		return fmt.Errorf("Failed to update RP status:%v", err)
 	}
 	return nil
 }
@@ -196,7 +221,7 @@ func GetResourceIdFromRowKey(rowKey string) string {
 	return strings.ReplaceAll(rowKey, "!", "/")
 }
 
-func PutAsyncOp(partitionKey string, operationId string, action string, status string) error {
+func PutAsyncOp(partitionKey string, operationId string, action string, status string, result interface{}) error {
 	client, err := getTableServiceClient()
 	if err != nil {
 		return err
@@ -207,6 +232,9 @@ func PutAsyncOp(partitionKey string, operationId string, action string, status s
 	p := make(map[string]interface{})
 	p["action"] = action
 	p["status"] = status
+	if result != nil {
+		p["output"] = result
+	}
 	row.Properties = p
 	guid := uuid.New().String()
 	options := storage.EntityOptions{
@@ -240,6 +268,7 @@ func GetAsyncOp(partitionKey string, operationId string) (*AsyncOperationState, 
 	action, _ = row.Properties["action"].(string)
 	status := ""
 	status, _ = row.Properties["status"].(string)
+	output := row.Properties["output"]
 
-	return &AsyncOperationState{Action: action, Status: status}, nil
+	return &AsyncOperationState{Action: action, Status: status, Output: output}, nil
 }
