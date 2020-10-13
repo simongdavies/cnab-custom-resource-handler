@@ -240,7 +240,7 @@ func validateCredentials(creds map[string]interface{}) error {
 	}
 
 	for k, v := range common.RPBundle.Credentials {
-		if _, ok := creds[k]; !ok && v.Required && {
+		if _, ok := creds[k]; !ok && v.Required {
 			return fmt.Errorf("Credential %s is required", k)
 		}
 	}
