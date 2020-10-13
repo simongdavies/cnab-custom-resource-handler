@@ -145,7 +145,7 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	args = append(args, action, installationName, "--tag", rpInput.Properties.BundlePullOptions.Tag)
 
 	if len(rpInput.Properties.Parameters) > 0 {
-		if err := validateParameters(rpInput.Properties.Parameters); err != nil {
+		if err := validateParameters(rpInput.Properties.Parameters, action); err != nil {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to validate parameters:%v", err)))
 			return
 		}
@@ -240,7 +240,7 @@ func validateCredentials(creds map[string]interface{}) error {
 	}
 
 	for k, v := range common.RPBundle.Credentials {
-		if _, ok := creds[k]; !ok && v.Required {
+		if _, ok := creds[k]; !ok && v.Required && {
 			return fmt.Errorf("Credential %s is required", k)
 		}
 	}
@@ -253,14 +253,14 @@ func validateCredentials(creds map[string]interface{}) error {
 	return nil
 }
 
-func validateParameters(params map[string]interface{}) error {
+func validateParameters(params map[string]interface{}, action string) error {
 
 	for k := range common.RPBundle.Parameters {
 		log.Debugf("Parameter Name:%s", k)
 	}
 
 	for k, v := range common.RPBundle.Parameters {
-		if _, ok := params[k]; !ok && v.Required {
+		if _, ok := params[k]; !ok && v.Required && v.AppliesTo(action) {
 			return fmt.Errorf("Parameter %s is required", k)
 		}
 	}
