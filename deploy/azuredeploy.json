@@ -328,7 +328,12 @@
       "properties": {
         "actions": [
           {
-            "name": "createdatabase",
+            "name": "installs/createdatabase",
+            "routingType": "Proxy",
+            "endpoint": "[concat('https://',variables('endPointDNSName'))]"
+          },
+                    {
+            "name": "installs/testcreatedatabase",
             "routingType": "Proxy",
             "endpoint": "[concat('https://',variables('endPointDNSName'))]"
           }

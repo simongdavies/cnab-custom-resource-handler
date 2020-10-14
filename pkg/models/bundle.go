@@ -23,6 +23,8 @@ type BundleCommandProperties struct {
 	*porter.BundlePullOptions `json:"-"`
 	ProvisioningState         string `json:"-"`
 	OperationId               string `json:"-"`
+	Host                      string `json:"-"`
+	CorrelationId             string `json:"-"`
 	Error                     string `json:"error,omitempty"`
 	Status                    string `json:"status,omitempty"`
 }

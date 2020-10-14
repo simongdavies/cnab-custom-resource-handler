@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	az "github.com/Azure/go-autorest/autorest/azure"
@@ -332,7 +333,7 @@ func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	//TODO check that the action has the same parameters as the action that is running
 
 	w.Header().Add("Retry-After", "60")
-	w.Header().Add("Location", fmt.Sprintf("https://management.azure.com%s/operations/%s&api-version=%s", rpInput.Id, guid, helpers.APIVersion))
+	w.Header().Add("Location", getLoctionHeader(rpInput, guid))
 	w.WriteHeader(http.StatusAccepted)
 
 }
@@ -383,7 +384,7 @@ func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Add("Retry-After", "60")
-	w.Header().Add("Location", fmt.Sprintf("https://management.azure.com%s/operations/%s&api-version=%s", rpInput.Id, guid, helpers.APIVersion))
+	w.Header().Add("Location", getLoctionHeader(rpInput, guid))
 	w.WriteHeader(http.StatusAccepted)
 
 }
@@ -461,4 +462,23 @@ func checkIfInstallationExists(name string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func getLoctionHeader(rpInput *models.BundleRP, guid string) string {
+	var location string
+	host := rpInput.Properties.Host
+	if len(host) == 0 {
+		port, exists := os.LookupEnv("LISTENER_PORT")
+		if !exists {
+			port = "8080"
+		}
+		host = fmt.Sprintf("localhost:%s", port)
+	}
+	if len(guid) > 0 {
+		location = fmt.Sprintf("https://%s%s/operations/%s&api-version=%s", host, rpInput.Id, guid, helpers.APIVersion)
+	} else {
+		location = fmt.Sprintf("https://%s%s&api-version=%s", host, rpInput.Id, helpers.APIVersion)
+	}
+	log.Debugf("Location Header:%s", location)
+	return location
 }
