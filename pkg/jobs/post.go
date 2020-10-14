@@ -83,8 +83,8 @@ func postJob(data *PostJobData) {
 
 func updateStatus(rpInput *models.BundleRP, action string, status string, operationId string, result interface{}) {
 	// Always reset the RP status only ASyncOp will show final operation status
-	rpInput.Properties.Status = ""
-	if err := azure.PutRPState(rpInput.SubscriptionId, rpInput.Id, rpInput.Properties); err != nil {
+
+	if err := azure.UpdateRPStatus(rpInput.SubscriptionId, rpInput.Id, ""); err != nil {
 		log.Debugf("Failed to update state:%v", err)
 	}
 	if err := azure.PutAsyncOp(rpInput.SubscriptionId, operationId, action, status, result); err != nil {

@@ -2,12 +2,9 @@ package models
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"strings"
 
 	"get.porter.sh/porter/pkg/porter"
-	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/go-chi/render"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
@@ -38,6 +35,7 @@ type RPProperties struct {
 	Name           string `json:"name"`
 	Type           string `json:"type"`
 	SubscriptionId string `json:"-"`
+	RequestPath    string `json:"-"`
 }
 
 type BundleRP struct {
@@ -85,20 +83,17 @@ func (payload *BundleRP) Bind(r *http.Request) error {
 }
 
 func (payload *BundleRP) setResource(r *http.Request) error {
-	requestPath := r.Header.Get("x-ms-customproviders-requestpath")
-	resource, err := azure.ParseResourceID(requestPath)
-	if err != nil {
-		return fmt.Errorf("Failed to parse x-ms-customproviders-requestpath: %v", err)
-	}
-	if !strings.HasPrefix(requestPath, "/") {
-		requestPath = fmt.Sprintf("%s%s", "/", requestPath)
-	}
-	requestParts := strings.Split(requestPath, "/")
 
-	payload.Id = requestPath
+	resource, resourceId, requestPath, err := helpers.GetResourceDetails(r)
+	if err != nil {
+		return err
+	}
+
+	payload.RequestPath = *requestPath
+	payload.Id = *resourceId
 	payload.Name = resource.ResourceName
 	payload.SubscriptionId = resource.SubscriptionID
-	payload.Type = strings.Join(requestParts[6:len(requestParts)-1], "/")
+	payload.Type = resource.ResourceType
 
 	return nil
 }

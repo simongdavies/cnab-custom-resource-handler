@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -19,12 +17,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type porterOutput struct {
-	Name  string `json:"Name"`
-	Value string `json:"Value"`
-	Type  string `json:"Type"`
-}
-
 func NewCustomResourceHandler() chi.Router {
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
@@ -39,7 +31,7 @@ func NewCustomResourceHandler() chi.Router {
 
 func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
-	log.Infof("Received GET Request: %s", rpInput.Id)
+	log.Infof("Received GET Request: %s", rpInput.RequestPath)
 
 	if azure.IsOperationsRequest(rpInput.Id) {
 		getOperationHandler(w, r)
@@ -52,7 +44,7 @@ func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	installationName := getInstallationName(rpInput.Id)
+	installationName := helpers.GetInstallationName(rpInput.Id)
 
 	// The last attempt to update the resource failed
 
@@ -128,8 +120,8 @@ func listCustomResourceHandler(w http.ResponseWriter, r *http.Request, subscript
 func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
-	log.Infof("Received PUT Request: %s", rpInput.Id)
-	installationName := getInstallationName(rpInput.Id)
+	log.Infof("Received PUT Request: %s", rpInput.RequestPath)
+	installationName := helpers.GetInstallationName(rpInput.Id)
 
 	action := "install"
 	provisioningState := "Installing"
@@ -190,18 +182,13 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 
 func getRPOutput(installationName string, rpInput *models.BundleRP, provisioningState string) (*models.BundleRPOutput, error) {
 
-	var cmdOutput []porterOutput
+	var cmdOutput []helpers.PorterOutput
+	var err error
 
 	if provisioningState == helpers.ProvisioningStateSucceeded {
-		args := []string{}
-		args = append(args, "installations", "output", "list", "-i", installationName)
-		out, err := helpers.ExecutePorterCommand(args)
+		cmdOutput, err = helpers.GetBundleOutput(installationName, []string{"install", "upgrade"})
 		if err != nil {
 			return nil, err
-		}
-
-		if err := json.Unmarshal(out, &cmdOutput); err != nil {
-			return nil, fmt.Errorf("Failed to read json from command: %v", err)
 		}
 	}
 
@@ -275,14 +262,18 @@ func validateParameters(params map[string]interface{}, action string) error {
 
 func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
-	log.Infof("Received POST Request: %s", rpInput.Id)
+	log.Infof("Received POST Request: %s", rpInput.RequestPath)
 
 	guid := rpInput.Properties.OperationId
-	action := getAction(rpInput.Id)
+	action := getAction(rpInput.RequestPath)
 	status := fmt.Sprintf("Running%s", action)
 
-	if rpInput.Properties.ProvisioningState == helpers.ProvisioningStateSucceeded && len(rpInput.Properties.Status) == 0 {
-		installationName := getInstallationName(rpInput.Id)
+	if rpInput.Properties.ProvisioningState != helpers.ProvisioningStateSucceeded {
+		_ = render.Render(w, r, helpers.ErrorConflict(fmt.Sprintf("Cannot start action %s if provisioning state is not %s ", action, helpers.ProvisioningStateSucceeded)))
+	}
+
+	if len(rpInput.Properties.Status) == 0 {
+		installationName := helpers.GetInstallationName(rpInput.Id)
 
 		if exists, err := checkIfInstallationExists(installationName); err != nil {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
@@ -322,8 +313,7 @@ func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 
 		jobs.PostJobs <- &postData
 
-		rpInput.Properties.Status = status
-		if err := azure.PutRPState(rpInput.SubscriptionId, rpInput.Id, rpInput.Properties); err != nil {
+		if err := azure.UpdateRPStatus(rpInput.SubscriptionId, rpInput.Id, status); err != nil {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to update state:%v", err)))
 			return
 		}
@@ -332,13 +322,14 @@ func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to update async op %s :%v", guid, err)))
 			return
 		}
-
+	} else {
+		if !strings.EqualFold(status, rpInput.Properties.Status) {
+			_ = render.Render(w, r, helpers.ErrorConflict(fmt.Sprintf("Cannot start action %s while status is %s", action, rpInput.Properties.Status)))
+			return
+		}
 	}
 
-	if !strings.EqualFold(status, rpInput.Properties.Status) {
-		_ = render.Render(w, r, helpers.ErrorConflict(fmt.Sprintf("Cannot start action %s while status is %s", action, rpInput.Properties.Status)))
-		return
-	}
+	//TODO check that the action has the same parameters as the action that is running
 
 	w.Header().Add("Retry-After", "60")
 	w.Header().Add("Location", fmt.Sprintf("https://management.azure.com%s/operations/%s&api-version=%s", rpInput.Id, guid, helpers.APIVersion))
@@ -347,7 +338,8 @@ func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getAction(requestPath string) string {
-	return strings.Split(requestPath, "/")[len(requestPath)-1]
+	parts := strings.Split(requestPath, "/")
+	return parts[len(parts)-1]
 }
 
 func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
@@ -355,7 +347,7 @@ func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	guid := rpInput.Properties.OperationId
 	if rpInput.Properties.ProvisioningState != helpers.ProvisioningStateDeleting {
 
-		installationName := getInstallationName(rpInput.Id)
+		installationName := helpers.GetInstallationName(rpInput.Id)
 		var args []string
 		if exists, err := checkIfInstallationExists(installationName); err != nil {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
@@ -414,7 +406,9 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 	if state.Action != "delete" && (!strings.EqualFold(state.Status, fmt.Sprintf("Running%s", state.Action)) && state.Status != helpers.AsyncOperationComplete) {
 		if state.Output != nil {
 			render.Status(r, http.StatusInternalServerError)
-			render.DefaultResponder(w, r, state.Output)
+			output := make(map[string]interface{})
+			output["Error"] = state.Output
+			render.DefaultResponder(w, r, output)
 		} else {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Unexpected status for action %s op id %s :%v", state.Action, rpInput.Name, state.Status)))
 		}
@@ -425,9 +419,21 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 		if state.Action == "delete" {
 			w.WriteHeader(http.StatusOK)
 		} else {
-			if state.Output != nil {
+			porterOutputs, err := helpers.GetBundleOutput(helpers.GetInstallationName(rpInput.Id), []string{state.Action})
+			if err != nil {
+				_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get outputs for action %s op id %s :%v", state.Action, rpInput.Name, err)))
+				return
+			}
+			if state.Output != nil || len(porterOutputs) > 0 {
+				var outputs = make(map[string]interface{})
+				if state.Output != nil {
+					outputs["output"] = state.Output
+				}
+				for _, v := range porterOutputs {
+					outputs[v.Name] = v
+				}
 				render.Status(r, http.StatusOK)
-				render.DefaultResponder(w, r, state.Output)
+				render.DefaultResponder(w, r, outputs)
 			} else {
 				w.WriteHeader(http.StatusNoContent)
 			}
@@ -436,16 +442,12 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO deal with same action with different parameters
+
 	w.Header().Add("Retry-After", "60")
 	w.Header().Add("Location", fmt.Sprintf("https://management.azure.com%s&api-version=%s", rpInput.Id, helpers.APIVersion))
 	w.WriteHeader(http.StatusAccepted)
 
-}
-
-func getInstallationName(requestPath string) string {
-	data := []byte(fmt.Sprintf("%s%s", strings.ToLower(common.TrimmedBundleTag), strings.ToLower(requestPath)))
-	hash := sha256.Sum256(data)
-	return fmt.Sprintf("%x", hash)
 }
 
 //TODO handle failed/successful installs

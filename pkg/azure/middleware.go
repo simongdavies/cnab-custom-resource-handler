@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
-	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/go-chi/render"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
@@ -69,25 +68,21 @@ func LoadState(next http.Handler) http.Handler {
 		}
 		ctx := context.WithValue(r.Context(), models.BundleContext, payload)
 
-		requestPath := r.Header.Get("x-ms-customproviders-requestpath")
-		resource, err := azure.ParseResourceID(requestPath)
+		resource, requestId, requestPath, err := helpers.GetResourceDetails(r)
 		if err != nil {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to parse x-ms-customproviders-requestpath: %v", err)))
 			return
 		}
-		if !strings.HasPrefix(requestPath, "/") {
-			requestPath = fmt.Sprintf("%s%s", "/", requestPath)
-		}
-		log.Debugf("Request path header: %s", requestPath)
+
 		// List request
-		// TODO get the resource name from a setting
+		// TODO get the resource name from a setting/metadata
 
 		if r.Method == "GET" && resource.ResourceName == "installs" {
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 
-		properties, err := GetRPState(resource.SubscriptionID, requestPath)
+		properties, err := GetRPState(resource.SubscriptionID, *requestId)
 
 		if err != nil {
 			storageError, ok := err.(storage.AzureStorageServiceError)
@@ -96,7 +91,7 @@ func LoadState(next http.Handler) http.Handler {
 				return
 			}
 			if ok && storageError.StatusCode == 404 && r.Method != "PUT" && //Not found is valid for 1st Put (Create)
-				!(r.Method == "GET" && IsOperationsRequest(requestPath)) { // Get on operations will produce not found
+				!(r.Method == "GET" && IsOperationsRequest(*requestPath)) { // Get on operations will produce not found
 				_ = render.Render(w, r, helpers.ErrorNotFound())
 				return
 			}
@@ -104,10 +99,18 @@ func LoadState(next http.Handler) http.Handler {
 		}
 
 		switch r.Method {
-		case "PUT", "POST":
+		case "PUT":
 			{
 				// properties will be nil on first PUT of a resource
 				if properties != nil && !IsTerminalProvisioningState(properties.ProvisioningState) {
+					_ = render.Render(w, r, helpers.ErrorConflict(fmt.Sprintf("Resource Provisioning State is: %s", properties.ProvisioningState)))
+					return
+				}
+			}
+		case "POST":
+			{
+				// properties will be nil on first PUT of a resource
+				if !IsTerminalProvisioningState(properties.ProvisioningState) {
 					_ = render.Render(w, r, helpers.ErrorConflict(fmt.Sprintf("Resource Provisioning State is: %s", properties.ProvisioningState)))
 					return
 				}
@@ -128,6 +131,18 @@ func LoadState(next http.Handler) http.Handler {
 			payload.Properties.Parameters = properties.Parameters
 			payload.Properties.ErrorResponse = properties.ErrorResponse
 			payload.Properties.OperationId = properties.OperationId
+			installationName := helpers.GetInstallationName(*requestId)
+			outputs, err := helpers.GetBundleOutput(installationName, []string{"install", "upgrade"})
+			if err != nil {
+				_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("Failed to get bundle outputs is: %v", err)))
+				return
+			}
+			for _, v := range outputs {
+				log.Debugf("Installation Name:%s Output:%s", installationName, v.Name)
+				if IsSenstive, _ := common.RPBundle.IsOutputSensitive(v.Name); !IsSenstive {
+					payload.Properties.Parameters[v.Name] = strings.TrimSuffix(v.Value, "\\n")
+				}
+			}
 		}
 
 		payload.Properties.BundlePullOptions = common.BundlePullOptions
@@ -136,6 +151,7 @@ func LoadState(next http.Handler) http.Handler {
 	})
 }
 func IsTerminalProvisioningState(provisioningState string) bool {
+	//TODO handle POST Action executing
 	return provisioningState == helpers.ProvisioningStateFailed || provisioningState == helpers.ProvisioningStateSucceeded
 }
 
