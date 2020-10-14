@@ -60,7 +60,7 @@ func BundleCtx(next http.Handler) http.Handler {
 				return
 			}
 		} else {
-			if err := payload.setResource(r); err != nil {
+			if err := payload.setRequestProperties(r); err != nil {
 				_ = render.Render(w, r, helpers.ErrorInvalidRequestFromError(err))
 				return
 			}
@@ -81,16 +81,17 @@ func (bundleCommandProperties *BundleCommandProperties) Render(w http.ResponseWr
 }
 
 func (payload *BundleRP) Bind(r *http.Request) error {
-	return payload.setResource(r)
+	return payload.setRequestProperties(r)
 }
 
-func (payload *BundleRP) setResource(r *http.Request) error {
+func (payload *BundleRP) setRequestProperties(r *http.Request) error {
 
 	resource, resourceId, requestPath, err := helpers.GetResourceDetails(r)
 	if err != nil {
 		return err
 	}
 
+	payload.Properties.Host = r.Host
 	payload.RequestPath = *requestPath
 	payload.Id = *resourceId
 	payload.Name = resource.ResourceName
