@@ -23,7 +23,6 @@ require (
 	github.com/Azure/go-autorest/autorest/validation v0.3.0 // indirect
 	github.com/cnabio/cnab-go v0.13.4-0.20200817181428-9005c1da4354
 	github.com/cnabio/cnab-to-oci v0.3.1-beta1
-	github.com/containerd/containerd v1.3.0
 	github.com/dnaeon/go-vcr v1.0.1 // indirect
 	github.com/docker/cli v0.0.0-20191017083524-a8ff7f821017
 	github.com/docker/distribution v2.7.1+incompatible

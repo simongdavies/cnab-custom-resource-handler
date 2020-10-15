@@ -36,7 +36,7 @@ func ExecutePorterCommand(args []string) ([]byte, error) {
 }
 
 func isDriverCommand(cmd string) bool {
-	return strings.Contains("installupgradeuninstallaction", cmd)
+	return strings.Contains("installupgradeuninstallinvoke", cmd)
 }
 
 func isOutputCommand(cmd string) bool {

@@ -445,7 +445,7 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 	// TODO deal with same action with different parameters
 
 	w.Header().Add("Retry-After", "60")
-	w.Header().Add("Location", fmt.Sprintf("https://management.azure.com%s&api-version=%s", rpInput.Id, helpers.APIVersion))
+	w.Header().Add("Location", getLoctionHeader(rpInput, ""))
 	w.WriteHeader(http.StatusAccepted)
 
 }
