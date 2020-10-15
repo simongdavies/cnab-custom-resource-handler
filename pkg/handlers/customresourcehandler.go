@@ -475,9 +475,9 @@ func getLoctionHeader(rpInput *models.BundleRP, guid string) string {
 		host = fmt.Sprintf("localhost:%s", port)
 	}
 	if len(guid) > 0 {
-		location = fmt.Sprintf("https://%s%s/operations/%s&api-version=%s", host, rpInput.Id, guid, helpers.APIVersion)
+		location = fmt.Sprintf("https://%s%s/operations/%s?api-version=%s", host, rpInput.Id, guid, helpers.APIVersion)
 	} else {
-		location = fmt.Sprintf("https://%s%s&api-version=%s", host, rpInput.Id, helpers.APIVersion)
+		location = fmt.Sprintf("https://%s%s?api-version=%s", host, rpInput.Id, helpers.APIVersion)
 	}
 	log.Debugf("Location Header:%s", location)
 	return location
