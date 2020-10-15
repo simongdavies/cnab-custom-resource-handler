@@ -275,7 +275,6 @@ func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 
 	if len(rpInput.Properties.Status) == 0 {
 		installationName := helpers.GetInstallationName(rpInput.Id)
-
 		if exists, err := checkIfInstallationExists(installationName); err != nil {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
 			return
@@ -420,7 +419,7 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 		if state.Action == "delete" {
 			w.WriteHeader(http.StatusOK)
 		} else {
-			porterOutputs, err := helpers.GetBundleOutput(helpers.GetInstallationName(rpInput.Id), []string{state.Action})
+			porterOutputs, err := helpers.GetBundleOutput(helpers.GetInstallationName(getResourceIdFromOperationsId(rpInput.Id)), []string{state.Action})
 			if err != nil {
 				_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get outputs for action %s op id %s :%v", state.Action, rpInput.Name, err)))
 				return
@@ -467,18 +466,28 @@ func checkIfInstallationExists(name string) (bool, error) {
 func getLoctionHeader(rpInput *models.BundleRP, guid string) string {
 	var location string
 	host := rpInput.Properties.Host
+	scheme := "https"
 	if len(host) == 0 {
 		port, exists := os.LookupEnv("LISTENER_PORT")
 		if !exists {
 			port = "8080"
 		}
 		host = fmt.Sprintf("localhost:%s", port)
+
+	}
+	if strings.HasPrefix(strings.ToLower(host), "localhost") {
+		scheme = "http"
 	}
 	if len(guid) > 0 {
-		location = fmt.Sprintf("https://%s%s/operations/%s?api-version=%s", host, rpInput.Id, guid, helpers.APIVersion)
+		location = fmt.Sprintf("%s://%s%s/operations/%s?api-version=%s", scheme, host, rpInput.Id, guid, helpers.APIVersion)
 	} else {
-		location = fmt.Sprintf("https://%s%s?api-version=%s", host, rpInput.Id, helpers.APIVersion)
+		location = fmt.Sprintf("%s://%s%s?api-version=%s", scheme, host, rpInput.Id, helpers.APIVersion)
 	}
 	log.Debugf("Location Header:%s", location)
 	return location
+}
+
+func getResourceIdFromOperationsId(requestPath string) string {
+	parts := strings.Split(requestPath, "/")
+	return strings.Join(parts[0:len(parts)-2], "/")
 }

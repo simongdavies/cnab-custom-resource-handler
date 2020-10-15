@@ -19,6 +19,7 @@ import (
 	"github.com/cnabio/cnab-to-oci/remotes"
 	"github.com/docker/cli/cli/config"
 	"github.com/docker/distribution/reference"
+	log "github.com/sirupsen/logrus"
 )
 
 var BundlePullOptions *porter.BundlePullOptions
@@ -102,6 +103,7 @@ func setupArg(key string, value interface{}, isFile bool, dir string) (*valuesou
 		c.Source.Value = name
 		os.Setenv(name, val)
 	}
+	log.Debugf("Set Up Arg:%s Key:%s Value:%s", key, c.Source.Key, name)
 	return &c, nil
 }
 

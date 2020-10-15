@@ -69,10 +69,10 @@ func postJob(data *PostJobData) {
 		data.Args = append(data.Args, "-c", credFile.Name())
 		defer os.Remove(credFile.Name())
 	}
-
+	data.Args = append(data.Args, "--tag", data.RPInput.Properties.Tag)
 	out, err := helpers.ExecutePorterCommand(data.Args)
 	if err == nil {
-		status = helpers.StatusSucceeded
+		status = helpers.AsyncOperationComplete
 	}
 
 	updateStatus(data.RPInput, data.Action, status, data.OperationId, string(out))
