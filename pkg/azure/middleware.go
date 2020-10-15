@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
+	"github.com/google/uuid"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/models"
@@ -35,13 +37,33 @@ func Login(next http.Handler) http.Handler {
 	})
 }
 
+func RequestId(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		requestId := r.Header.Get("X-Ms-Correlation-Request-Id")
+		if len(requestId) == 0 {
+			requestId = uuid.New().String()
+		}
+		r.Header.Set(middleware.RequestIDHeader, requestId)
+		ctx = context.WithValue(ctx, middleware.RequestIDKey, requestId)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 func ValidateRPType(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestPath := r.Header.Get("x-ms-customproviders-requestpath")
 		if len(requestPath) == 0 {
-			log.Info("Header x-ms-customproviders-requestpath isssing from request")
-			_ = render.Render(w, r, helpers.ErrorInternalServerError("Header x-ms-customproviders-requestpath missing from request"))
-			return
+			log.Info("Header x-ms-customproviders-requestpath misssing from request")
+			requestPath = r.URL.Path
+			// CustomRP doesnt set header on Get on location URL and invokes URL instead
+			if r.Method == "GET" && IsOperationsRequest(requestPath) {
+				log.Debugf("Setting x-ms-customproviders-requestpath to :%s", r.URL.Path)
+				r.Header.Set("x-ms-customproviders-requestpath", requestPath)
+			} else {
+				_ = render.Render(w, r, helpers.ErrorInternalServerError("Header x-ms-customproviders-requestpath missing from request"))
+				return
+			}
 		}
 
 		if !strings.HasPrefix(strings.ToLower(strings.TrimPrefix(requestPath, "/")), strings.ToLower(strings.TrimPrefix(RPType, "/"))) {

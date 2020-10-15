@@ -38,6 +38,7 @@ type RPProperties struct {
 	Type           string `json:"type"`
 	SubscriptionId string `json:"-"`
 	RequestPath    string `json:"-"`
+	RequestId      string `json:"-"`
 }
 
 type BundleRP struct {

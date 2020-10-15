@@ -39,6 +39,8 @@ func getTableServiceClient() (*storage.TableServiceClient, error) {
 	return &tableService, nil
 }
 
+// TODO get guid from header/context
+
 func GetRPState(partitionKey string, resourceId string) (*models.BundleCommandProperties, error) {
 	client, err := getTableServiceClient()
 	if err != nil {
