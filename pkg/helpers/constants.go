@@ -14,7 +14,9 @@ const (
 	StatusSucceeded            = "Succeeded"
 	StatusFailed               = "Failed"
 	APIVersion                 = "2018-09-01-preview"
-	AsyncOperationComplete     = "complete"
+	AsyncOperationComplete     = "Succeeded"
+	AsyncOperationFailed       = "Failed"
+	AsyncOperationUnknown      = "Unknown"
 )
 
 // Version returns the version string

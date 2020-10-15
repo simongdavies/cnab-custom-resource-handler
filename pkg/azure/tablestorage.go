@@ -27,7 +27,7 @@ type RPState struct {
 type AsyncOperationState struct {
 	Action string
 	Status string
-	Output interface{}
+	Output string
 }
 
 func getTableServiceClient() (*storage.TableServiceClient, error) {
@@ -270,7 +270,8 @@ func GetAsyncOp(partitionKey string, operationId string) (*AsyncOperationState, 
 	action, _ = row.Properties["action"].(string)
 	status := ""
 	status, _ = row.Properties["status"].(string)
-	output := row.Properties["output"]
+	output := ""
+	output, _ = row.Properties["output"].(string)
 
 	return &AsyncOperationState{Action: action, Status: status, Output: output}, nil
 }

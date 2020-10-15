@@ -44,7 +44,7 @@ func postJob(data *PostJobData) {
 	status := helpers.StatusFailed
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
-		responseError := fmt.Errorf("error creating temp dir: %v", err)
+		responseError := fmt.Sprintf("error creating temp dir: %v", err)
 		updateStatus(data.RPInput, data.Action, status, data.OperationId, responseError)
 		return
 	}
@@ -53,7 +53,7 @@ func postJob(data *PostJobData) {
 	if len(data.RPInput.Properties.Parameters) > 0 {
 		paramFile, err := common.WriteParametersFile(data.RPInput.Properties.Parameters, dir)
 		if err != nil {
-			updateStatus(data.RPInput, data.Action, status, data.OperationId, err)
+			updateStatus(data.RPInput, data.Action, status, data.OperationId, err.Error())
 			return
 		}
 		data.Args = append(data.Args, "-p", paramFile.Name())
@@ -63,7 +63,7 @@ func postJob(data *PostJobData) {
 	if len(data.RPInput.Properties.Credentials) > 0 {
 		credFile, err := common.WriteCredentialsFile(data.RPInput.Properties.Credentials, dir)
 		if err != nil {
-			updateStatus(data.RPInput, data.Action, status, data.OperationId, err)
+			updateStatus(data.RPInput, data.Action, status, data.OperationId, err.Error())
 			return
 		}
 		data.Args = append(data.Args, "-c", credFile.Name())
@@ -81,7 +81,7 @@ func postJob(data *PostJobData) {
 
 }
 
-func updateStatus(rpInput *models.BundleRP, action string, status string, operationId string, result interface{}) {
+func updateStatus(rpInput *models.BundleRP, action string, status string, operationId string, result string) {
 	// Always reset the RP status only ASyncOp will show final operation status
 
 	if err := azure.UpdateRPStatus(rpInput.SubscriptionId, rpInput.Id, ""); err != nil {

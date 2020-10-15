@@ -394,60 +394,69 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
 
+	operation := models.Operation{
+		Id:   rpInput.Id,
+		Name: rpInput.Name,
+	}
+
 	state, err := azure.GetAsyncOp(rpInput.SubscriptionId, rpInput.Name)
 	if err != nil {
-		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get async op %s :%v", rpInput.Name, err)))
+		writeOperation(w, r, &operation, helpers.AsyncOperationUnknown, "InternalServerError", fmt.Sprintf("Failed to get async op %s :%v", rpInput.Name, err), http.StatusInternalServerError)
 		return
 	}
 	if state.Action == "delete" && (state.Status != helpers.ProvisioningStateDeleting && state.Status != helpers.AsyncOperationComplete) {
-		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Unexpected status for delete action op id %s :%v", rpInput.Name, state.Status)))
+		writeOperation(w, r, &operation, helpers.AsyncOperationUnknown, "InternalServerError", fmt.Sprintf("Unexpected status for delete action op id %s :%v", rpInput.Name, state.Status), http.StatusInternalServerError)
 		return
 	}
 	if state.Action != "delete" && (!strings.EqualFold(state.Status, fmt.Sprintf("Running%s", state.Action)) && state.Status != helpers.AsyncOperationComplete) {
-		if state.Output != nil {
-			render.Status(r, http.StatusInternalServerError)
-			output := make(map[string]interface{})
-			output["Error"] = state.Output
-			render.DefaultResponder(w, r, output)
+		if len(state.Output) > 0 {
+			writeOperation(w, r, &operation, helpers.AsyncOperationFailed, "InternalServerError", state.Output, http.StatusInternalServerError)
 		} else {
-			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Unexpected status for action %s op id %s :%v", state.Action, rpInput.Name, state.Status)))
+			writeOperation(w, r, &operation, helpers.AsyncOperationUnknown, "InternalServerError", fmt.Sprintf("Unexpected status for action %s op id %s :%v", state.Action, rpInput.Name, state.Status), http.StatusInternalServerError)
 		}
 		return
 	}
 
 	if state.Status == helpers.AsyncOperationComplete {
-		if state.Action == "delete" {
-			w.WriteHeader(http.StatusOK)
-		} else {
+		operation.Status = helpers.AsyncOperationComplete
+		if state.Action != "delete" {
 			porterOutputs, err := helpers.GetBundleOutput(helpers.GetInstallationName(getResourceIdFromOperationsId(rpInput.Id)), []string{state.Action})
 			if err != nil {
-				_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get outputs for action %s op id %s :%v", state.Action, rpInput.Name, err)))
+				writeOperation(w, r, &operation, helpers.AsyncOperationComplete, "InternalServerError", fmt.Sprintf("Failed to get outputs for action %s op id %s :%v", state.Action, rpInput.Name, err), http.StatusInternalServerError)
 				return
 			}
-			if state.Output != nil || len(porterOutputs) > 0 {
-				var outputs = make(map[string]interface{})
-				if state.Output != nil {
-					outputs["output"] = state.Output
+			if len(state.Output) > 0 || len(porterOutputs) > 0 {
+				operation.Properties = make(map[string]interface{})
+				if len(state.Output) > 0 {
+					operation.Properties["output"] = state.Output
 				}
 				for _, v := range porterOutputs {
-					outputs[v.Name] = v
+					operation.Properties[v.Name] = &v
 				}
 				render.Status(r, http.StatusOK)
-				render.DefaultResponder(w, r, outputs)
-			} else {
-				w.WriteHeader(http.StatusNoContent)
 			}
-
 		}
+		render.Status(r, http.StatusOK)
+		render.DefaultResponder(w, r, operation)
 		return
 	}
 
 	// TODO deal with same action with different parameters
 
+	operation.Status = state.Status
 	w.Header().Add("Retry-After", "60")
 	w.Header().Add("Location", getLoctionHeader(rpInput, ""))
-	w.WriteHeader(http.StatusAccepted)
+	render.Status(r, http.StatusAccepted)
+	render.DefaultResponder(w, r, &operation)
 
+}
+
+func writeOperation(w http.ResponseWriter, r *http.Request, operation *models.Operation, status string, code string, message string, statuscode int) {
+	operation.Status = status
+	operation.Error.Code = code
+	operation.Error.Message = message
+	render.Status(r, statuscode)
+	render.DefaultResponder(w, r, &operation)
 }
 
 //TODO handle failed/successful installs
