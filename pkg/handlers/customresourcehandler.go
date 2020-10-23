@@ -125,13 +125,13 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	installationName := helpers.GetInstallationName(rpInput.Id)
 
 	action := "install"
-	provisioningState := "Installing"
+	provisioningState := "Created"
 	if exists, err := checkIfInstallationExists(installationName); err != nil {
 		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
 		return
 	} else if exists {
 		action = "upgrade"
-		provisioningState = "Upgrading"
+		provisioningState = "Accepted"
 	}
 
 	var args []string
@@ -157,13 +157,13 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 		InstallationName: installationName,
 	}
 
-	jobs.PutJobs <- &jobData
-
 	rpInput.Properties.ProvisioningState = provisioningState
 	if err := azure.PutRPState(rpInput.SubscriptionId, rpInput.Id, rpInput.Properties); err != nil {
 		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to update state:%v", err)))
 		return
 	}
+
+	jobs.PutJobs <- &jobData
 
 	rpOutput, err := getRPOutput(installationName, rpInput, provisioningState)
 	if err != nil {
