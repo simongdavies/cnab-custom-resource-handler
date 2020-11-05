@@ -344,6 +344,7 @@ func getAction(requestPath string) string {
 
 func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
+	log.Infof("Received DELETE Request: %s", rpInput.RequestPath)
 	guid := rpInput.Properties.OperationId
 	if rpInput.Properties.ProvisioningState != helpers.ProvisioningStateDeleting {
 
@@ -393,6 +394,7 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 	// TODO validate the operation Id
 
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
+	log.Infof("Received GET Operation Request: %s", rpInput.RequestPath)
 
 	operation := models.Operation{
 		Id:   rpInput.Id,
