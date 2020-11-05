@@ -52,19 +52,23 @@ func RequestId(next http.Handler) http.Handler {
 
 func ValidateRPType(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestPath := r.Header.Get("x-ms-customproviders-requestpath")
-		if len(requestPath) == 0 {
-			log.Info("Header x-ms-customproviders-requestpath misssing from request")
-			requestPath = r.URL.Path
-			// CustomRP doesnt set header on Get on location URL and invokes URL instead
-			if r.Method == "GET" && IsOperationsRequest(requestPath) {
-				log.Debugf("Setting x-ms-customproviders-requestpath to :%s", r.URL.Path)
-				r.Header.Set("x-ms-customproviders-requestpath", requestPath)
-			} else {
-				_ = render.Render(w, r, helpers.ErrorInternalServerError("Header x-ms-customproviders-requestpath missing from request"))
-				return
-			}
-		}
+		// requestPath := r.Header.Get("x-ms-customproviders-requestpath")
+		// if len(requestPath) == 0 {
+		// 	log.Info("Header x-ms-customproviders-requestpath misssing from request")
+		// 	requestPath = r.URL.Path
+		// 	// CustomRP doesnt set header on Get on location URL and invokes URL instead
+		// 	if r.Method == "GET" && IsOperationsRequest(requestPath) {
+		// 		log.Debugf("Setting x-ms-customproviders-requestpath to :%s", r.URL.Path)
+		// 		r.Header.Set("x-ms-customproviders-requestpath", requestPath)
+		// 	} else {
+		// 		_ = render.Render(w, r, helpers.ErrorInternalServerError("Header x-ms-customproviders-requestpath missing from request"))
+		// 		return
+		// 	}
+		// }
+
+		requestPath := r.URL.Path
+		log.Debugf("Setting x-ms-customproviders-requestpath to :%s", requestPath)
+		r.Header.Set("x-ms-customproviders-requestpath", requestPath)
 
 		if !strings.HasPrefix(strings.ToLower(strings.TrimPrefix(requestPath, "/")), strings.ToLower(strings.TrimPrefix(RPType, "/"))) {
 			log.Infof("request: %s not for registered RP Type:%s", requestPath, RPType)
