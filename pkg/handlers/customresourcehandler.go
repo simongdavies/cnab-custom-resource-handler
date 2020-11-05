@@ -33,6 +33,7 @@ func NewCustomResourceHandler() chi.Router {
 func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
 	log.Infof("Received GET Request: %s", rpInput.RequestPath)
+	log.Infof("GET Request URI: %s", r.URL.String())
 
 	if azure.IsOperationsRequest(rpInput.Id) {
 		getOperationHandler(w, r)
@@ -122,6 +123,7 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
 	log.Infof("Received PUT Request: %s", rpInput.RequestPath)
+	log.Infof("PUT Request URI: %s", r.URL.String())
 	installationName := helpers.GetInstallationName(rpInput.Id)
 
 	action := "install"
@@ -264,6 +266,7 @@ func validateParameters(params map[string]interface{}, action string) error {
 func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
 	log.Infof("Received POST Request: %s", rpInput.RequestPath)
+	log.Infof("POST Request URI: %s", r.URL.String())
 
 	guid := rpInput.Properties.OperationId
 	action := getAction(rpInput.RequestPath)
@@ -345,6 +348,7 @@ func getAction(requestPath string) string {
 func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
 	log.Infof("Received DELETE Request: %s", rpInput.RequestPath)
+	log.Infof("DELETE Request URI: %s", r.URL.String())
 	guid := rpInput.Properties.OperationId
 	if rpInput.Properties.ProvisioningState != helpers.ProvisioningStateDeleting {
 
@@ -395,6 +399,7 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
 	log.Infof("Received GET Operation Request: %s", rpInput.RequestPath)
+	log.Infof("Operation Request URI: %s", r.URL.String())
 
 	operation := models.Operation{
 		Id:   rpInput.Id,
