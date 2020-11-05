@@ -13,13 +13,10 @@ import (
 
 // GetResourceDetails parses the request header containing resource details and returns the details of the resource
 func GetResourceDetails(r *http.Request) (*azure.Resource, *string, *string, error) {
-	requestPath := r.Header.Get("x-ms-customproviders-requestpath")
+	requestPath := r.URL.Path
 	resource, err := azure.ParseResourceID(requestPath)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("Failed to parse x-ms-customproviders-requestpath: %v", err)
-	}
-	if !strings.HasPrefix(requestPath, "/") {
-		requestPath = fmt.Sprintf("%s%s", "/", requestPath)
+		return nil, nil, nil, fmt.Errorf("Failed to parse resource id from request Path: %v", err)
 	}
 
 	log.Debugf("Request path header: %s", requestPath)

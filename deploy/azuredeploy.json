@@ -45,7 +45,6 @@
       "type": "Microsoft.Authorization/roleAssignments",
       "name": "[variables('roleAssignmentId')]",
       "apiVersion": "2018-09-01-preview",
-      "location": "",
       "dependsOn": [
         "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('msi_name'))]"
       ],
@@ -164,7 +163,7 @@
                 "caddy",
                 "run",
                 "--config",
-                "/test/Caddyfile"
+                "/caddy/Caddyfile"
               ],
               "resources": {
                 "requests": {
@@ -179,7 +178,7 @@
                 },
                 {
                   "name": "caddy-file",
-                  "mountPath": "/test"
+                  "mountPath": "/caddy"
                 }
               ]
             }
@@ -330,19 +329,19 @@
           {
             "name": "installs/createdatabase",
             "routingType": "Proxy",
-            "endpoint": "[concat('https://',variables('endPointDNSName'))]"
+            "endpoint": "[concat('https://',variables('endPointDNSName'),'/{requestPath}')]"
           },
                     {
             "name": "installs/testcreatedatabase",
             "routingType": "Proxy",
-            "endpoint": "[concat('https://',variables('endPointDNSName'))]"
+            "endpoint": "[concat('https://',variables('endPointDNSName'),'/{requestPath}')]"
           }
         ],
         "resourceTypes": [
           {
             "name": "[variables('rpTypeName')]",
             "routingType": "Proxy",
-            "endpoint": "[concat('https://',variables('endPointDNSName'))]"
+            "endpoint": "[concat('https://',variables('endPointDNSName'),'/{requestPath}')]"
           }
         ]
       }
