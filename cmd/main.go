@@ -37,7 +37,7 @@ var requiredSettings = map[string]string{
 var optionalSettings = map[string]interface{}{
 	"AllowInsecureRegistry": "CNAB_BUNDLE_INSECURE_REGISTRY",
 	"ForcePull":             "CNAB_BUNDLE_FORCE_PULL",
-	"TypeOfRP":              "TYPE_OF_RP",
+	"IsRPaaS":               "IS_RPAAS",
 }
 
 const (
@@ -76,8 +76,7 @@ var rootCmd = &cobra.Command{
 		}
 		az.RPType = requiredSettings["CustomRPType"]
 		//TODO properly handle RPaaS
-		typeOfRP, exists := optionalSettings["TypeOfRP"].(string)
-		az.IsRPaaS = exists && strings.EqualFold(typeOfRP, "rpaas")
+		az.IsRPaaS = optionalSettings["IsRPaaS"].(bool)
 
 		// TODO need to handle digests and versioning correctly
 		if _, ok := ref.(reference.Tagged); !ok {
@@ -142,7 +141,7 @@ func loadSettings() error {
 	}
 	for k, v := range optionalSettings {
 		val := os.Getenv(v.(string))
-		if boolVal, err := strconv.ParseBool(val); err != nil {
+		if boolVal, err := strconv.ParseBool(val); err == nil {
 			optionalSettings[k] = boolVal
 		} else {
 			optionalSettings[k] = false

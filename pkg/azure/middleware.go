@@ -65,7 +65,7 @@ func ValidateRPType(next http.Handler) http.Handler {
 				return
 			}
 		} else {
-			if !IsRPaaS && !strings.HasPrefix(strings.ToLower(requestPath), strings.ToLower(RPType)) {
+			if !strings.HasPrefix(strings.ToLower(requestPath), strings.ToLower(RPType)) {
 				log.Infof("request: %s not for registered RP Type:%s", requestPath, RPType)
 				_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("request: %s not for registered RP Type:%s", requestPath, RPType)))
 				return
