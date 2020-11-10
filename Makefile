@@ -33,6 +33,11 @@ deploy: publish
 	az group create -n  $(GROUP) -l $(LOCATION); \
 	az deployment group create -g $(GROUP) --template-file deploy/azuredeploy.json --param customRPImage=$(IMAGE):$(VERSION)-$(COMMIT) --param debug=true --param bundleTag=$(BUNDLETAG) --param rpName=$(RPNAME)
 
+.PHONY: deploy-for-rpaas
+deploy-for-rpaas: publish
+	az group create -n  $(GROUP) -l $(LOCATION); \
+	az deployment group create -g $(GROUP) --template-file deploy/azuredeployforrpaas.json --param customRPImage=$(IMAGE):$(VERSION)-$(COMMIT) --param debug=true --param bundleTag=$(BUNDLETAG) --param rpName=$(RPNAME) --param apiKey=$(APIKEY)
+
 .PHONY: default
 default: build
 

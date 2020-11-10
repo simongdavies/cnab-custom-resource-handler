@@ -37,6 +37,7 @@ var requiredSettings = map[string]string{
 var optionalSettings = map[string]interface{}{
 	"AllowInsecureRegistry": "CNAB_BUNDLE_INSECURE_REGISTRY",
 	"ForcePull":             "CNAB_BUNDLE_FORCE_PULL",
+	"TypeOfRP":              "TYPE_OF_RP",
 }
 
 const (
@@ -74,6 +75,9 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 		az.RPType = requiredSettings["CustomRPType"]
+		//TODO properly handle RPaaS
+		typeOfRP, exists := optionalSettings["TypeOfRP"].(string)
+		az.IsRPaaS = exists && strings.EqualFold(typeOfRP, "rpaas")
 
 		// TODO need to handle digests and versioning correctly
 		if _, ok := ref.(reference.Tagged); !ok {

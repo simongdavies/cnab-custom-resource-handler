@@ -21,6 +21,7 @@ type AzureLoginContextKey string
 const AzureLoginContext AzureLoginContextKey = "AzureLoginContext"
 
 var RPType string
+var IsRPaaS bool
 
 // HTTP middleware setting original request URL on context
 func Login(next http.Handler) http.Handler {
@@ -55,10 +56,20 @@ func ValidateRPType(next http.Handler) http.Handler {
 
 		requestPath := r.URL.Path
 
-		if !strings.HasPrefix(strings.ToLower(requestPath), strings.ToLower(RPType)) {
-			log.Infof("request: %s not for registered RP Type:%s", requestPath, RPType)
-			_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("request: %s not for registered RP Type:%s", requestPath, RPType)))
-			return
+		// TODO Handle multiple providers/types for RPaaS
+
+		if IsRPaaS {
+			if !strings.Contains(strings.ToLower(requestPath), strings.ToLower(RPType)) {
+				log.Infof("request: %s not for registered Provider:%s", requestPath, RPType)
+				_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("request: %s not for registered Provider:%s", requestPath, RPType)))
+				return
+			}
+		} else {
+			if !IsRPaaS && !strings.HasPrefix(strings.ToLower(requestPath), strings.ToLower(RPType)) {
+				log.Infof("request: %s not for registered RP Type:%s", requestPath, RPType)
+				_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("request: %s not for registered RP Type:%s", requestPath, RPType)))
+				return
+			}
 		}
 
 		if strings.Contains(requestPath, "!") {
