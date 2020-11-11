@@ -248,8 +248,8 @@
                   "value": "[variables('aysncOpTableName')]"
                 },
                 {
-                  "name": "TYPE_OF_RP",
-                  "value": "rpaas"
+                  "name": "IS_RPAAS",
+                  "value": "true"
                 },
                 {
                   "name": "CUSTOM_RP_TYPE",
