@@ -38,6 +38,7 @@ var optionalSettings = map[string]interface{}{
 	"AllowInsecureRegistry": "CNAB_BUNDLE_INSECURE_REGISTRY",
 	"ForcePull":             "CNAB_BUNDLE_FORCE_PULL",
 	"IsRPaaS":               "IS_RPAAS",
+	"LogRequestBody":        "LOG_REQUEST_BODY",
 }
 
 const (
@@ -77,6 +78,7 @@ var rootCmd = &cobra.Command{
 		az.RPType = requiredSettings["CustomRPType"]
 		//TODO properly handle RPaaS
 		az.IsRPaaS = optionalSettings["IsRPaaS"].(bool)
+		az.LogRequestBody = optionalSettings["LogRequestBody"].(bool)
 
 		// TODO need to handle digests and versioning correctly
 		if _, ok := ref.(reference.Tagged); !ok {
@@ -101,6 +103,7 @@ var rootCmd = &cobra.Command{
 		jobs.Start()
 		log.Debug("Creating Router")
 		router := chi.NewRouter()
+		router.Use(az.LogBody)
 		router.Use(az.RequestId)
 		router.Use(middleware.RealIP)
 		router.Use(middleware.Logger)

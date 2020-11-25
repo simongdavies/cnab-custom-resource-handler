@@ -231,12 +231,14 @@ func validateCredentials(creds map[string]interface{}) error {
 
 	for k, v := range common.RPBundle.Credentials {
 		if _, ok := creds[k]; !ok && v.Required {
+			log.Debugf("Credential %s is required", k)
 			return fmt.Errorf("Credential %s is required", k)
 		}
 	}
 
 	for k := range creds {
 		if _, ok := common.RPBundle.Credentials[k]; !ok {
+			log.Debugf("Credential %s is not specified in bundle", k)
 			return fmt.Errorf("Credential %s is not specified in bundle", k)
 		}
 	}

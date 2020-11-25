@@ -207,7 +207,7 @@
                 },
                 {
                   "name": "CNAB_AZURE_STATE_STORAGE_ACCOUNT_KEY",
-                  "value": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('cnab_azure_state_storage_account_name')), '2019-04-01').keys[0].value]"
+                  "securevalue": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('cnab_azure_state_storage_account_name')), '2019-04-01').keys[0].value]"
                 },
                 {
                   "name": "CNAB_AZURE_STATE_FILESHARE",

@@ -1,8 +1,10 @@
 package azure
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -22,6 +24,7 @@ const AzureLoginContext AzureLoginContextKey = "AzureLoginContext"
 
 var RPType string
 var IsRPaaS bool
+var LogRequestBody bool
 
 // HTTP middleware setting original request URL on context
 func Login(next http.Handler) http.Handler {
@@ -35,6 +38,20 @@ func Login(next http.Handler) http.Handler {
 		log.Debugf("Logged in to Azure for request URI %s", r.RequestURI)
 		ctx := context.WithValue(r.Context(), AzureLoginContext, loginInfo)
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func LogBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if LogRequestBody {
+			if body, err := ioutil.ReadAll(r.Body); err != nil {
+				log.Debug("Error Logging Request Payload:%w", err)
+			} else {
+				r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+				log.Debugf("Request Payload:%s", string(body))
+			}
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -64,6 +81,7 @@ func ValidateRPType(next http.Handler) http.Handler {
 				_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("request: %s not for registered Provider:%s", requestPath, RPType)))
 				return
 			}
+
 		} else {
 			if !strings.HasPrefix(strings.ToLower(requestPath), strings.ToLower(RPType)) {
 				log.Infof("request: %s not for registered RP Type:%s", requestPath, RPType)
