@@ -413,11 +413,11 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 		writeOperation(w, r, &operation, helpers.AsyncOperationUnknown, "InternalServerError", fmt.Sprintf("Failed to get async op %s :%v", rpInput.Name, err), http.StatusInternalServerError)
 		return
 	}
-	if state.Action == "delete" && (state.Status != helpers.ProvisioningStateDeleting && state.Status != helpers.AsyncOperationComplete) {
+	if state.Action == "delete" && (state.Status != helpers.ProvisioningStateDeleting && state.Status != helpers.AsyncOperationComplete && state.Status != helpers.AsyncOperationFailed) {
 		writeOperation(w, r, &operation, helpers.AsyncOperationUnknown, "InternalServerError", fmt.Sprintf("Unexpected status for delete action op id %s :%v", rpInput.Name, state.Status), http.StatusInternalServerError)
 		return
 	}
-	if state.Action != "delete" && (!strings.EqualFold(state.Status, fmt.Sprintf("Running%s", state.Action)) && state.Status != helpers.AsyncOperationComplete) {
+	if state.Action != "delete" && (!strings.EqualFold(state.Status, fmt.Sprintf("Running%s", state.Action)) && state.Status != helpers.AsyncOperationComplete && state.Status != helpers.AsyncOperationFailed) {
 		if len(state.Output) > 0 {
 			writeOperation(w, r, &operation, helpers.AsyncOperationFailed, "InternalServerError", state.Output, http.StatusInternalServerError)
 		} else {
@@ -426,12 +426,12 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if state.Status == helpers.AsyncOperationComplete {
-		operation.Status = helpers.AsyncOperationComplete
+	if state.Status == helpers.AsyncOperationComplete || state.Status == helpers.StatusFailed {
+		operation.Status = state.Status
 		if state.Action != "delete" {
 			porterOutputs, err := helpers.GetBundleOutput(helpers.GetInstallationName(getResourceIdFromOperationsId(rpInput.Id)), []string{state.Action})
 			if err != nil {
-				writeOperation(w, r, &operation, helpers.AsyncOperationComplete, "InternalServerError", fmt.Sprintf("Failed to get outputs for action %s op id %s :%v", state.Action, rpInput.Name, err), http.StatusInternalServerError)
+				writeOperation(w, r, &operation, state.Status, "InternalServerError", fmt.Sprintf("Failed to get outputs for action %s op id %s :%v", state.Action, rpInput.Name, err), http.StatusInternalServerError)
 				return
 			}
 			if len(state.Output) > 0 || len(porterOutputs) > 0 {
