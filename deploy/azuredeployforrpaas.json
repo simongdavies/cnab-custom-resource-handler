@@ -283,11 +283,8 @@
           {
             "name": "caddy-file",
             "secret": {
-              "Caddyfile": "[base64(concat('
-                              {
-                                debug
-                              }
-                              ',variables('endPointDNSPrefix'),'.northeurope.azurecontainer.io {
+              "Caddyfile": "[base64(concat(
+                                variables('endPointDNSPrefix'),'.northeurope.azurecontainer.io {
                                 log {
                                     output stdout
                                     format console

@@ -11,6 +11,9 @@ BUNDLETAG				:= "cnabquickstarts.azurecr.io/porter/sql-server-always-on-kubernet
 GROUP 					:= custom_resource_test
 LOCATION				:= northeurope
 RPNAME 					:= sqlServerAlwaysOn
+KV							:= sdkv
+SSLCERTFULLCHAIN		:= cnab-bridge-ssl-cert-full-chain
+SSLKEY					:= cnab-bridge-ssl-key
 GO = GO111MODULE=on go
 COMMIT ?= $(shell git rev-parse --short HEAD)
 
@@ -36,7 +39,9 @@ deploy: publish
 .PHONY: deploy-for-rpaas
 deploy-for-rpaas: publish
 	az group create -n  $(GROUP) -l $(LOCATION); \
-	az deployment group create -g $(GROUP) --template-file deploy/azuredeployforrpaas.json --param customRPImage=$(IMAGE):$(VERSION)-$(COMMIT) --param debug=true --param bundleTag=$(BUNDLETAG) --param apiKey=$(APIKEY)
+	SSLKEY=$$(az keyvault secret show --name $(SSLKEY) --vault-name $(KV) --output tsv --query 'value'); \
+	SSLCERTFULLCHAIN=$$(az keyvault secret show --name $(SSLCERTFULLCHAIN) --vault-name $(KV) --output tsv --query 'value'); \
+	az deployment group create -g $(GROUP) --template-file deploy/azuredeployforrpaasnew.json --param customRPImage=$(IMAGE):$(VERSION)-$(COMMIT) --param debug=true --param bundleTag=$(BUNDLETAG) --param apiKey=$(APIKEY)  --param ssl-key=$$SSLKEY --param ssl-full-chain-crt=$$SSLCERTFULLCHAIN 
 
 .PHONY: default
 default: build
