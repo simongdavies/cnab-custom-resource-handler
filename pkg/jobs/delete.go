@@ -9,6 +9,7 @@ import (
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/models"
+	"github.com/simongdavies/cnab-custom-resource-handler/pkg/settings"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -17,6 +18,7 @@ type DeleteJobData struct {
 	Args             []string
 	InstallationName string
 	OperationId      string
+	BundleInfo       *settings.BundleInformation
 }
 
 var DeleteJobs chan *DeleteJobData = make(chan *DeleteJobData, 20)
@@ -62,10 +64,10 @@ func deleteJob(jobData *DeleteJobData) {
 
 	jobData.RPInput.Properties = properties
 
-	jobData.Args = append(jobData.Args, "uninstall", jobData.InstallationName, "--delete", "--tag", jobData.RPInput.Properties.BundlePullOptions.Tag)
+	jobData.Args = append(jobData.Args, "uninstall", jobData.InstallationName, "--delete", "--tag", jobData.BundleInfo.BundlePullOptions.Tag)
 
 	if len(jobData.RPInput.Properties.Parameters) > 0 {
-		paramFile, err := common.WriteParametersFile(jobData.RPInput.Properties.Parameters, dir)
+		paramFile, err := common.WriteParametersFile(jobData.BundleInfo.RPBundle, jobData.RPInput.Properties.Parameters, dir)
 		if err != nil {
 			responseError := helpers.ErrorInternalServerErrorFromError(err)
 			if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
@@ -78,7 +80,7 @@ func deleteJob(jobData *DeleteJobData) {
 	}
 
 	if len(jobData.RPInput.Properties.Credentials) > 0 {
-		credFile, err := common.WriteCredentialsFile(jobData.RPInput.Properties.Credentials, dir)
+		credFile, err := common.WriteCredentialsFile(jobData.BundleInfo.RPBundle, jobData.RPInput.Properties.Credentials, dir)
 		if err != nil {
 			responseError := helpers.ErrorInternalServerErrorFromError(err)
 			if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {

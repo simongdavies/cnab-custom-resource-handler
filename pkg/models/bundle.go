@@ -4,10 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	"get.porter.sh/porter/pkg/porter"
 	"github.com/go-chi/render"
-	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
+	"github.com/simongdavies/cnab-custom-resource-handler/pkg/settings"
 )
 
 // ContextKey is the type used for the keys in the request context
@@ -17,16 +16,16 @@ const BundleContext ContextKey = "bundle"
 
 // BundleCommandProperties defines the bundle and the properties to be used for the command
 type BundleCommandProperties struct {
-	Credentials               map[string]interface{} `json:"credentials"`
-	Parameters                map[string]interface{} `json:"parameters"`
-	ErrorResponse             *helpers.ErrorResponse `json:"-"`
-	*porter.BundlePullOptions `json:"-"`
-	ProvisioningState         string `json:"-"`
-	OperationId               string `json:"-"`
-	Host                      string `json:"-"`
-	CorrelationId             string `json:"-"`
-	Error                     string `json:"error,omitempty"`
-	Status                    string `json:"status,omitempty"`
+	Credentials                 map[string]interface{} `json:"credentials"`
+	Parameters                  map[string]interface{} `json:"parameters"`
+	ErrorResponse               *helpers.ErrorResponse `json:"-"`
+	*settings.BundleInformation `json:"-"`
+	ProvisioningState           string `json:"-"`
+	OperationId                 string `json:"-"`
+	Host                        string `json:"-"`
+	CorrelationId               string `json:"-"`
+	Error                       string `json:"error,omitempty"`
+	Status                      string `json:"status,omitempty"`
 }
 
 type BundleCommandOutputs struct {
@@ -73,7 +72,6 @@ func BundleCtx(next http.Handler) http.Handler {
 }
 
 func (bundleCommandProperties *BundleCommandProperties) Bind(r *http.Request) error {
-	bundleCommandProperties.BundlePullOptions = common.BundlePullOptions
 	return nil
 }
 

@@ -246,6 +246,14 @@
                   "value": "[variables('aysncOpTableName')]"
                 },
                 {
+                  "name": "RESOURCE_PROVIDER",
+                  "value": "[variables('aysncOpTableName')]"
+                },
+                                {
+                  "name": "RESOURCE_TYPE",
+                  "value": "[parameters('rpName')]"
+                },
+                {
                   "name": "CUSTOM_RP_TYPE",
                   "value": "[concat(resourceId('Microsoft.CustomProviders/resourceProviders',parameters('rpName')),'/',variables('rpTypeName'))]"
                 }

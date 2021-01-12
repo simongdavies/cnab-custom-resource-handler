@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"get.porter.sh/porter/pkg/porter"
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/google/uuid"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
@@ -13,7 +12,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const timeout = 60
+const (
+	AzureStorageConnectionString = "AZURE_STORAGE_CONNECTION_STRING"
+	CnabStateStorageAccountKey   = "CNAB_AZURE_STATE_STORAGE_ACCOUNT_KEY"
+	timeout                      = 60
+)
 
 var StorageAccountName string
 var StorageAccountKey string
@@ -59,9 +62,7 @@ func GetRPState(partitionKey string, resourceId string) (*models.BundleCommandPr
 		log.Debugf("Failed to GET state for %s", resourceId)
 		return nil, err
 	}
-	properties := models.BundleCommandProperties{
-		BundlePullOptions: &porter.BundlePullOptions{},
-	}
+	properties := models.BundleCommandProperties{}
 
 	if params, ok := row.Properties["Parameters"].(string); ok {
 		err = json.Unmarshal([]byte(params), &properties.Parameters)
@@ -83,11 +84,6 @@ func GetRPState(partitionKey string, resourceId string) (*models.BundleCommandPr
 			return nil, fmt.Errorf("Failed to de-serialise error response: %v", err)
 		}
 	}
-
-	// TODO use reflection
-	properties.Tag = row.Properties["Tag"].(string)
-	properties.InsecureRegistry = row.Properties["InsecureRegistry"].(bool)
-	properties.Force = row.Properties["Force"].(bool)
 	properties.ProvisioningState = row.Properties["ProvisioningState"].(string)
 	if val, ok := row.Properties["OperationId"].(string); ok {
 		properties.OperationId = val
@@ -115,13 +111,11 @@ func PutRPState(partitionKey string, resourceId string, properties *models.Bundl
 	// TODO use reflection
 	p["Parameters"] = string(params)
 	p["Credentials"] = string(creds)
-	p["Tag"] = properties.Tag
-	p["InsecureRegistry"] = properties.InsecureRegistry
-	p["Force"] = properties.Force
 	p["ProvisioningState"] = properties.ProvisioningState
 	p["OperationId"] = properties.OperationId
-	p["RPType"] = RPType
 	p["ErrorResponse"] = nil
+	p["ResourceProvider"] = properties.BundleInformation.ResourceProvider
+	p["ResourceType"] = properties.BundleInformation.ResourceType
 	p["Status"] = properties.Status
 	row.Properties = p
 	guid := uuid.New().String()
@@ -130,8 +124,7 @@ func PutRPState(partitionKey string, resourceId string, properties *models.Bundl
 		RequestID: guid,
 	}
 	log.Debugf("Put RP State for parition key: %s row key: %s id: %s", partitionKey, rowkey, guid)
-	err = row.InsertOrReplace(&options)
-	return err
+	return row.InsertOrReplace(&options)
 }
 
 func DeleteRPState(partitionKey string, resourceId string) error {
@@ -202,7 +195,7 @@ func UpdateRPStatus(partitionKey string, resourceId string, status string) error
 	return nil
 }
 
-func ListRPState(partitionKey string) (*storage.EntityQueryResult, error) {
+func ListRPState(partitionKey string, resourceProviderName string, resourceTypeName string) (*storage.EntityQueryResult, error) {
 	client, err := getTableServiceClient()
 	if err != nil {
 		return nil, err
@@ -211,7 +204,7 @@ func ListRPState(partitionKey string) (*storage.EntityQueryResult, error) {
 	guid := uuid.New().String()
 	options := storage.QueryOptions{
 		RequestID: guid,
-		Filter:    fmt.Sprintf("PartitionKey eq '%s' and RPType eq '%s'", partitionKey, RPType),
+		Filter:    fmt.Sprintf("PartitionKey eq '%s' and ResourceProvider eq '%s' and ResourceType eq '%s'", partitionKey, resourceProviderName, resourceTypeName),
 		Select:    []string{"RowKey"},
 	}
 	return table.QueryEntities(timeout, storage.NoMetadata, &options)

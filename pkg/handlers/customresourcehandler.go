@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	az "github.com/Azure/go-autorest/autorest/azure"
+	"github.com/cnabio/cnab-go/bundle"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 	"github.com/google/uuid"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/azure"
-	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/jobs"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/models"
@@ -21,6 +21,7 @@ import (
 func NewCustomResourceHandler() chi.Router {
 	r := chi.NewRouter()
 	r.Use(render.SetContentType(render.ContentTypeJSON))
+	r.Use(azure.ValidateRPType)
 	r.Use(azure.LoadState)
 	r.Use(models.BundleCtx)
 	r.Get("/*", getCustomResourceHandler)
@@ -46,7 +47,7 @@ func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	installationName := helpers.GetInstallationName(rpInput.Id)
+	installationName := helpers.GetInstallationName(rpInput.Properties.TrimmedBundleTag, rpInput.Id)
 
 	// The last attempt to update the resource failed
 
@@ -82,7 +83,7 @@ func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rpOutput, err := getRPOutput(installationName, rpInput, rpInput.Properties.ProvisioningState)
+	rpOutput, err := getRPOutput(rpInput.Properties.BundleInformation.RPBundle, installationName, rpInput, rpInput.Properties.ProvisioningState)
 	if err != nil {
 		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed getRPOutput: %v", err)))
 		return
@@ -91,8 +92,11 @@ func getCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func listCustomResourceHandler(w http.ResponseWriter, r *http.Request, subscriptionId string) {
+	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
+	log.Infof("Received LIST Request: %s", rpInput.RequestPath)
+	log.Infof("LIST Request URI: %s", r.URL.String())
 	// TODO handle paging
-	res, err := azure.ListRPState(subscriptionId)
+	res, err := azure.ListRPState(subscriptionId, rpInput.Properties.BundleInformation.ResourceProvider, rpInput.Properties.BundleInformation.ResourceType)
 	if err != nil {
 		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed getRPOutput: %v", err)))
 		return
@@ -124,7 +128,7 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	rpInput := r.Context().Value(models.BundleContext).(*models.BundleRP)
 	log.Infof("Received PUT Request: %s", rpInput.RequestPath)
 	log.Infof("PUT Request URI: %s", r.URL.String())
-	installationName := helpers.GetInstallationName(rpInput.Id)
+	installationName := helpers.GetInstallationName(rpInput.Properties.TrimmedBundleTag, rpInput.Id)
 
 	action := "install"
 	provisioningState := "Created"
@@ -140,14 +144,14 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	args = append(args, action, installationName, "--tag", rpInput.Properties.BundlePullOptions.Tag)
 
 	if len(rpInput.Properties.Parameters) > 0 {
-		if err := validateParameters(rpInput.Properties.Parameters, action); err != nil {
+		if err := validateParameters(rpInput.Properties.BundleInformation.RPBundle, rpInput.Properties.Parameters, action); err != nil {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to validate parameters:%v", err)))
 			return
 		}
 	}
 
 	if len(rpInput.Properties.Credentials) > 0 {
-		if err := validateCredentials(rpInput.Properties.Credentials); err != nil {
+		if err := validateCredentials(rpInput.Properties.BundleInformation.RPBundle, rpInput.Properties.Credentials); err != nil {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to validate credentials:%v", err)))
 			return
 		}
@@ -167,7 +171,7 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 
 	jobs.PutJobs <- &jobData
 
-	rpOutput, err := getRPOutput(installationName, rpInput, provisioningState)
+	rpOutput, err := getRPOutput(rpInput.Properties.BundleInformation.RPBundle, installationName, rpInput, provisioningState)
 	if err != nil {
 		_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to get RP output:%v", err)))
 		return
@@ -178,18 +182,19 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusOK
 	}
 
+	// Using provisioning state to show that operation is async, no location header reqruied  (see https://github.com/Azure/azure-resource-manager-rpc/blob/master/v1.0/Addendum.md#creatingupdating-using-put)
 	render.Status(r, status)
 	render.DefaultResponder(w, r, rpOutput)
 
 }
 
-func getRPOutput(installationName string, rpInput *models.BundleRP, provisioningState string) (*models.BundleRPOutput, error) {
+func getRPOutput(rpBundle *bundle.Bundle, installationName string, rpInput *models.BundleRP, provisioningState string) (*models.BundleRPOutput, error) {
 
 	var cmdOutput []helpers.PorterOutput
 	var err error
 
 	if provisioningState == helpers.ProvisioningStateSucceeded {
-		cmdOutput, err = helpers.GetBundleOutput(installationName, []string{"install", "upgrade"})
+		cmdOutput, err = helpers.GetBundleOutput(rpBundle, installationName, []string{"install", "upgrade"})
 		if err != nil {
 			return nil, err
 		}
@@ -201,7 +206,7 @@ func getRPOutput(installationName string, rpInput *models.BundleRP, provisioning
 	output["Installation"] = installationName
 	for _, v := range cmdOutput {
 		log.Debugf("Installation Name:%s Output:%s", installationName, v.Name)
-		if IsSenstive, _ := common.RPBundle.IsOutputSensitive(v.Name); !IsSenstive {
+		if IsSenstive, _ := rpBundle.IsOutputSensitive(v.Name); !IsSenstive {
 			output[v.Name] = strings.TrimSuffix(v.Value, "\\n")
 		}
 	}
@@ -223,13 +228,13 @@ func getRPOutput(installationName string, rpInput *models.BundleRP, provisioning
 	return &rpOutput, nil
 }
 
-func validateCredentials(creds map[string]interface{}) error {
+func validateCredentials(rpBundle *bundle.Bundle, creds map[string]interface{}) error {
 
-	for k := range common.RPBundle.Credentials {
+	for k := range rpBundle.Credentials {
 		log.Debugf("Credential Name:%s", k)
 	}
 
-	for k, v := range common.RPBundle.Credentials {
+	for k, v := range rpBundle.Credentials {
 		if _, ok := creds[k]; !ok && v.Required {
 			log.Debugf("Credential %s is required", k)
 			return fmt.Errorf("Credential %s is required", k)
@@ -237,7 +242,7 @@ func validateCredentials(creds map[string]interface{}) error {
 	}
 
 	for k := range creds {
-		if _, ok := common.RPBundle.Credentials[k]; !ok {
+		if _, ok := rpBundle.Credentials[k]; !ok {
 			log.Debugf("Credential %s is not specified in bundle", k)
 			return fmt.Errorf("Credential %s is not specified in bundle", k)
 		}
@@ -245,20 +250,20 @@ func validateCredentials(creds map[string]interface{}) error {
 	return nil
 }
 
-func validateParameters(params map[string]interface{}, action string) error {
+func validateParameters(rpBundle *bundle.Bundle, params map[string]interface{}, action string) error {
 
-	for k := range common.RPBundle.Parameters {
+	for k := range rpBundle.Parameters {
 		log.Debugf("Parameter Name:%s", k)
 	}
 
-	for k, v := range common.RPBundle.Parameters {
+	for k, v := range rpBundle.Parameters {
 		if _, ok := params[k]; !ok && v.Required && v.AppliesTo(action) {
 			return fmt.Errorf("Parameter %s is required", k)
 		}
 	}
 
 	for k := range params {
-		if _, ok := common.RPBundle.Parameters[k]; !ok {
+		if _, ok := rpBundle.Parameters[k]; !ok {
 			return fmt.Errorf("Parameter %s is not specified in bundle", k)
 		}
 	}
@@ -279,7 +284,7 @@ func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(rpInput.Properties.Status) == 0 {
-		installationName := helpers.GetInstallationName(rpInput.Id)
+		installationName := helpers.GetInstallationName(rpInput.Properties.TrimmedBundleTag, rpInput.Id)
 		if exists, err := checkIfInstallationExists(installationName); err != nil {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
 			return
@@ -294,14 +299,14 @@ func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 		args = append(args, "invoke", installationName, "--action", action)
 
 		if len(rpInput.Properties.Parameters) > 0 {
-			if err := validateParameters(rpInput.Properties.Parameters, action); err != nil {
+			if err := validateParameters(rpInput.Properties.BundleInformation.RPBundle, rpInput.Properties.Parameters, action); err != nil {
 				_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to validate parameters:%v", err)))
 				return
 			}
 		}
 
 		if len(rpInput.Properties.Credentials) > 0 {
-			if err := validateCredentials(rpInput.Properties.Credentials); err != nil {
+			if err := validateCredentials(rpInput.Properties.BundleInformation.RPBundle, rpInput.Properties.Credentials); err != nil {
 				_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to validate credentials:%v", err)))
 				return
 			}
@@ -337,7 +342,7 @@ func postCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	//TODO check that the action has the same parameters as the action that is running
 
 	w.Header().Add("Retry-After", "60")
-	w.Header().Add("Location", getLoctionHeader(rpInput, guid))
+	w.Header().Add("Location", getLocationHeader(rpInput, guid))
 	w.WriteHeader(http.StatusAccepted)
 
 }
@@ -354,7 +359,7 @@ func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	guid := rpInput.Properties.OperationId
 	if rpInput.Properties.ProvisioningState != helpers.ProvisioningStateDeleting {
 
-		installationName := helpers.GetInstallationName(rpInput.Id)
+		installationName := helpers.GetInstallationName(rpInput.Properties.TrimmedBundleTag, rpInput.Id)
 		var args []string
 		if exists, err := checkIfInstallationExists(installationName); err != nil {
 			_ = render.Render(w, r, helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to check for existing installation: %v", err)))
@@ -374,6 +379,7 @@ func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 			Args:             args,
 			InstallationName: installationName,
 			OperationId:      guid,
+			BundleInfo:       rpInput.Properties.BundleInformation,
 		}
 
 		jobs.DeleteJobs <- &jobData
@@ -390,7 +396,7 @@ func deleteCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Add("Retry-After", "60")
-	w.Header().Add("Location", getLoctionHeader(rpInput, guid))
+	w.Header().Add("Location", getLocationHeader(rpInput, guid))
 	w.WriteHeader(http.StatusAccepted)
 
 }
@@ -429,7 +435,7 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 	if state.Status == helpers.AsyncOperationComplete || state.Status == helpers.StatusFailed {
 		operation.Status = state.Status
 		if state.Action != "delete" {
-			porterOutputs, err := helpers.GetBundleOutput(helpers.GetInstallationName(getResourceIdFromOperationsId(rpInput.Id)), []string{state.Action})
+			porterOutputs, err := helpers.GetBundleOutput(rpInput.Properties.BundleInformation.RPBundle, helpers.GetInstallationName(rpInput.Properties.TrimmedBundleTag, getResourceIdFromOperationsId(rpInput.Id)), []string{state.Action})
 			if err != nil {
 				writeOperation(w, r, &operation, state.Status, "InternalServerError", fmt.Sprintf("Failed to get outputs for action %s op id %s :%v", state.Action, rpInput.Name, err), http.StatusInternalServerError)
 				return
@@ -454,7 +460,7 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 
 	operation.Status = state.Status
 	w.Header().Add("Retry-After", "60")
-	w.Header().Add("Location", getLoctionHeader(rpInput, ""))
+	w.Header().Add("Location", getLocationHeader(rpInput, ""))
 	render.Status(r, http.StatusAccepted)
 	render.DefaultResponder(w, r, &operation)
 
@@ -462,8 +468,10 @@ func getOperationHandler(w http.ResponseWriter, r *http.Request) {
 
 func writeOperation(w http.ResponseWriter, r *http.Request, operation *models.Operation, status string, code string, message string, statuscode int) {
 	operation.Status = status
-	operation.Error.Code = code
-	operation.Error.Message = message
+	operation.Error = &models.OperationError{
+		Code:    code,
+		Message: message,
+	}
 	render.Status(r, statuscode)
 	render.DefaultResponder(w, r, &operation)
 }
@@ -481,7 +489,7 @@ func checkIfInstallationExists(name string) (bool, error) {
 	return true, nil
 }
 
-func getLoctionHeader(rpInput *models.BundleRP, guid string) string {
+func getLocationHeader(rpInput *models.BundleRP, guid string) string {
 	var location string
 	host := rpInput.Properties.Host
 	scheme := "https"
