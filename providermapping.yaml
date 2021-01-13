@@ -1,0 +1,6 @@
+mappings:
+  - provider: cnab.sqlserver
+    type: service
+    tag: cnabquickstarts.azurecr.io/porter/sql-server-always-on-kubernetes-customui/bundle:0.2.7
+    forcepull: true
+    insecureregistry: false

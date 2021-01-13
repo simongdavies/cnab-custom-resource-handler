@@ -2,18 +2,19 @@ package settings
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
 	"get.porter.sh/porter/pkg/porter"
-
 	"github.com/cnabio/cnab-go/bundle"
 	"github.com/cnabio/cnab-to-oci/remotes"
 	"github.com/docker/cli/cli/config"
 	"github.com/docker/distribution/reference"
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 var IsRPaaS bool
@@ -23,7 +24,6 @@ var RequiredSettings = map[string]string{
 	"StorageAccountName":   "CNAB_AZURE_STATE_STORAGE_ACCOUNT_NAME",
 	"StorageResourceGroup": "CNAB_AZURE_STATE_STORAGE_RESOURCE_GROUP",
 	"SusbcriptionId":       "CNAB_AZURE_SUBSCRIPTION_ID",
-	"BundleTag":            "CNAB_BUNDLE_TAG",
 	"AsyncOpTable":         "CUSTOM_RP_ASYNC_OP_TABLE",
 	"StateTable":           "CUSTOM_RP_STATE_TABLE",
 }
@@ -32,8 +32,9 @@ var OptionalSettings = map[string]interface{}{
 	"AllowInsecureRegistry": "CNAB_BUNDLE_INSECURE_REGISTRY:bool",
 	"ForcePull":             "CNAB_BUNDLE_FORCE_PULL:bool",
 	"LogRequestBody":        "LOG_REQUEST_BODY:bool",
-	"ResourceProvider":      "RESOURCE_PROVIDER:string",
+	"IsRPaaS":               "IS_RPAAS:bool",
 	"ResourceType":          "RESOURCE_TYPE:string",
+	"BundleTag":             "CNAB_BUNDLE_TAG:string",
 }
 
 type BundleInformation struct {
@@ -44,9 +45,21 @@ type BundleInformation struct {
 	RPBundle          *bundle.Bundle
 }
 
+type Mapping struct {
+	Provider              string `mapstructure:"provider"`
+	Type                  string `mapstructure:"type"`
+	Tag                   string `mapstructure:"tag"`
+	ForcePull             bool   `mapstructure:"forcepull"`
+	AllowInsecureRegistry bool   `mapstructure:"insecureregistry"`
+}
+
 var RPToProvider = make(map[string]*BundleInformation)
 
-// var BundleInfo BundleInformation
+type Config struct {
+	Mappings []Mapping
+}
+
+var mappingConfiguration Config
 
 func Load() error {
 	for k, v := range RequiredSettings {
@@ -73,49 +86,91 @@ func Load() error {
 		}
 	}
 
-	resourceProviderName := OptionalSettings["ResourceProvider"].(string)
 	resourceTypeName := OptionalSettings["ResourceType"].(string)
-	IsRPaaS = len(resourceProviderName) > 0 && !strings.EqualFold("Microsoft.CustomProviders", resourceProviderName)
-
-	//TODO properly handle RPaaS
+	IsRPaaS = OptionalSettings["IsRPaaS"].(bool)
 	if IsRPaaS {
-		// TODO something
+		log.Debug("Running as RPaaS Endpoint")
+		viper.SetConfigType("yaml")
+		viper.SetConfigName("providermapping")
+		viper.AddConfigPath("$HOME/.cnabrp")
+		viper.AddConfigPath(".")
+		err := viper.ReadInConfig()
+		if err != nil {
+			log.Errorf("Error reading config file: %v \n", err)
+			return err
+		}
+		err = viper.Unmarshal(&mappingConfiguration)
+		if err != nil {
+			log.Errorf("Error decoding config file: %v \n", err)
+			return err
+		}
+
+		for _, m := range mappingConfiguration.Mappings {
+			log.Debugf("Processing Mapping for Provider %s Type %s Tag %s", m.Provider, m.Type, m.Tag)
+			bundleInformation, err := getBundleInfo(m.Provider, m.Type, m.Tag, m.ForcePull, m.AllowInsecureRegistry)
+			if err != nil {
+				return err
+			}
+			rpType := GetRPName(m.Provider, m.Type)
+			RPToProvider[rpType] = bundleInformation
+		}
+
 	} else {
-		bundleInformation := BundleInformation{
-			ResourceProvider: resourceProviderName,
-			ResourceType:     resourceTypeName,
+		log.Debug("Running as CustomRP Endpoint")
+		resourceProviderName := "Microsoft.CustomProviders"
+
+		bundleTag, ok := OptionalSettings["BundleTag"].(string)
+		if !ok || len(bundleTag) == 0 {
+			return errors.New("Environment Variable CNAB_BUNDLE_TAG should be set when running as Custom RP ")
+		}
+
+		bundleInformation, err := getBundleInfo(resourceProviderName, resourceTypeName, bundleTag, OptionalSettings["ForcePull"].(bool), OptionalSettings["AllowInsecureRegistry"].(bool))
+		if err != nil {
+			return err
 		}
 		rpType := GetRPName(resourceProviderName, resourceTypeName)
-		RPToProvider[rpType] = &bundleInformation
-		ref, err := validateBundleTag(RequiredSettings["BundleTag"])
-		if err != nil {
-			log.Errorf("Error validating bundle tag %v", err)
-			return err
-		}
-		// TODO need to handle digests and versioning correctly
-		if _, ok := ref.(reference.Tagged); !ok {
-			if _, ok := ref.(reference.Digested); !ok {
-				RequiredSettings["BundleTag"] += ":latest"
-			}
-		}
-
-		bundleInformation.TrimmedBundleTag = reference.TrimNamed(ref).String()
-		bundleInformation.BundlePullOptions = &porter.BundlePullOptions{
-			Tag:              RequiredSettings["BundleTag"],
-			Force:            OptionalSettings["ForcePull"].(bool),
-			InsecureRegistry: OptionalSettings["AllowInsecureRegistry"].(bool),
-		}
-
-		if err := pullBundle(&bundleInformation); err != nil {
-			log.Errorf("Error pulling bundle %v", err)
-			return err
-		}
-
+		RPToProvider[rpType] = bundleInformation
+		log.Debugf("Processing Requests for Type %s Tag %s", bundleInformation.ResourceType, bundleInformation.BundlePullOptions.Tag)
 	}
 
 	LogRequestBody = OptionalSettings["LogRequestBody"].(bool)
 
 	return nil
+}
+
+func getBundleInfo(resourceProviderName string, resourceTypeName string, bundleTag string, force bool, allowInsecureRegistry bool) (*BundleInformation, error) {
+
+	bundleInformation := BundleInformation{
+		ResourceProvider: resourceProviderName,
+		ResourceType:     resourceTypeName,
+	}
+
+	ref, err := validateBundleTag(bundleTag)
+	if err != nil {
+		log.Errorf("Error validating bundle tag %v", err)
+		return nil, err
+	}
+	// TODO need to handle digests and versioning correctly
+	if _, ok := ref.(reference.Tagged); !ok {
+		if _, ok := ref.(reference.Digested); !ok {
+			bundleTag += ":latest"
+		}
+	}
+
+	bundleInformation.TrimmedBundleTag = reference.TrimNamed(ref).String()
+	log.Debugf("Trimmed Bundle Tag: %s", bundleInformation.TrimmedBundleTag)
+	bundleInformation.BundlePullOptions = &porter.BundlePullOptions{
+		Tag:              bundleTag,
+		Force:            force,
+		InsecureRegistry: allowInsecureRegistry,
+	}
+
+	if err := pullBundle(&bundleInformation); err != nil {
+		log.Errorf("Error pulling bundle %v", err)
+		return nil, err
+	}
+	return &bundleInformation, nil
+
 }
 
 // GetRPName returns the RP Name

@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/simongdavies/cnab-custom-resource-handler/pkg"
 	az "github.com/simongdavies/cnab-custom-resource-handler/pkg/azure"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/handlers"
 
@@ -28,6 +29,7 @@ var rootCmd = &cobra.Command{
 		if debug {
 			log.SetLevel(log.DebugLevel)
 		}
+		log.Debugf("Commit:%s Version:%s", pkg.Commit, pkg.Version)
 		port, exists := os.LookupEnv("LISTENER_PORT")
 		if !exists {
 			port = "8080"

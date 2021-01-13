@@ -16,5 +16,6 @@ RUN apt update; \
 COPY /setup/config.toml ${PORTER_HOME}
 ENV PATH=${PORTER_HOME}:${CNAB_AZURE_HOME}:${PATH}
 COPY /bin/cnabcustomrphandler /
+COPY /providermapping.yaml /
 WORKDIR /
 ENTRYPOINT ["/cnabcustomrphandler"]

@@ -248,16 +248,12 @@
                   "value": "[variables('aysncOpTableName')]"
                 },
                 {
-                  "name": "IS_RPAAS",
-                  "value": "true"
-                },
-                {
                   "name": "LOG_REQUEST_BODY",
                   "value": "true"
                 },
                 {
-                  "name": "CUSTOM_RP_TYPE",
-                  "value": "providers/cnab.sqlserver"
+                  "name": "IS_RPAAS",
+                  "value": "true"
                 }
               ],
               "command": "[if(parameters('debug'),json('[\"/cnabcustomrphandler\",\"--debug\"]'),json('[\"/cnabcustomrphandler\"]'))]",

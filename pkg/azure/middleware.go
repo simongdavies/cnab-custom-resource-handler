@@ -80,27 +80,29 @@ func ValidateRPType(next http.Handler) http.Handler {
 			return
 		}
 
-		// TODO Handle multiple providers/types for RPaaS
-
+		var bundleInfo *settings.BundleInformation
+		var ok bool
 		if settings.IsRPaaS {
-			// if !strings.Contains(strings.ToLower(requestPath), strings.ToLower(common.RPType)) {
-			// 	log.Infof("request: %s not for registered Provider:%s", requestPath, common.RPType)
-			// 	_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("request: %s not for registered Provider:%s", requestPath, common.RPType)))
-			// 	return
-			// }
-
+			rpName := settings.GetRPName(resource.Provider, resource.ResourceType)
+			bundleInfo, ok = settings.RPToProvider[rpName]
+			if !ok {
+				log.Infof("no mapping found for request: %s Provider:%s", requestPath, rpName)
+				_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("no mapping found for request: %s Provider:%s", requestPath, rpName)))
+				return
+			}
+			log.Debugf("Using Bundle %s to process request", bundleInfo.BundlePullOptions.Tag)
 		} else {
 			resource.ResourceType = strings.Split(requestPath, "/")[8]
 			rpName := settings.GetRPName(resource.Provider, resource.ResourceType)
-			bundleInfo := settings.RPToProvider[rpName]
-			if !strings.EqualFold(resource.Provider, bundleInfo.ResourceProvider) || !strings.EqualFold(resource.ResourceType, bundleInfo.ResourceType) {
+			bundleInfo, ok = settings.RPToProvider[rpName]
+			if !ok || !strings.EqualFold(resource.Provider, bundleInfo.ResourceProvider) || !strings.EqualFold(resource.ResourceType, bundleInfo.ResourceType) {
 				log.Infof("request: %s not for registered Resource Provider %s Resource Type:%s", requestPath, bundleInfo.ResourceProvider, bundleInfo.ResourceType)
 				_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("request: %s not for registered Resource Provider %s Resource Type:%s", requestPath, bundleInfo.ResourceProvider, bundleInfo.ResourceType)))
 				return
 			}
-			payload.Properties.BundleInformation = bundleInfo
 		}
 
+		payload.Properties.BundleInformation = bundleInfo
 		if strings.Contains(requestPath, "!") {
 			log.Infof("request: %s contains !", requestPath)
 			_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("resource name: %s is not valid ! character is not allowed", requestPath)))
@@ -208,9 +210,5 @@ func IsOperationsRequest(requestPath string) bool {
 
 func IsListRequest(requestPath string) bool {
 	parts := strings.Split(requestPath, "/")
-	// list request will have even number of parts for CustomRP and odd for RPaaS
-	if settings.IsRPaaS {
-		return len(parts)%2 == 1
-	}
 	return len(parts)%2 == 0
 }
