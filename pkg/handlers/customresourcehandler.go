@@ -253,17 +253,19 @@ func validateCredentials(rpBundle *bundle.Bundle, creds map[string]interface{}) 
 func validateParameters(rpBundle *bundle.Bundle, params map[string]interface{}, action string) error {
 
 	for k := range rpBundle.Parameters {
-		log.Debugf("Parameter Name:%s", k)
+		log.Debugf("Processing parameter name:%s", k)
 	}
 
 	for k, v := range rpBundle.Parameters {
 		if _, ok := params[k]; !ok && v.Required && v.AppliesTo(action) {
+			log.Debugf("Parameter Name:%s Value is required", k)
 			return fmt.Errorf("Parameter %s is required", k)
 		}
 	}
 
 	for k := range params {
 		if _, ok := rpBundle.Parameters[k]; !ok {
+			log.Debugf("Parameter Name:%s Value not specified in bundle", k)
 			return fmt.Errorf("Parameter %s is not specified in bundle", k)
 		}
 	}
