@@ -236,7 +236,7 @@ func PutAsyncOp(partitionKey string, operationId string, action string, status s
 		Timeout:   timeout,
 		RequestID: guid,
 	}
-	log.Debugf("Put AsyncOp for partition key: %s operationId: %s id: %s", partitionKey, operationId, guid)
+	log.Debugf("Put AsyncOp for partition key: %s operationId: %s id: %s action:%s status %s", partitionKey, operationId, guid, action, status)
 	err = row.InsertOrReplace(&options)
 	return err
 }
