@@ -77,12 +77,14 @@ func putJob(jobData *PutJobData) {
 	}
 
 	if out, err := helpers.ExecutePorterCommand(jobData.Args); err != nil {
+		log.Debugf("Execut Porter Command failed: %v", err)
 		responseError := helpers.ErrorInternalServerError(string(out))
 		if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
 			log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 		}
 		return
 	}
+	log.Debugf("Porter Command for PUT request %s Succeeded", jobData.RPInput.Id)
 	jobData.RPInput.Properties.ProvisioningState = helpers.ProvisioningStateSucceeded
 	if err := azure.PutRPState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, jobData.RPInput.Properties); err != nil {
 		jobData.RPInput.Properties.ProvisioningState = helpers.ProvisioningStateFailed
