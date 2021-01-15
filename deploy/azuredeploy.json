@@ -248,6 +248,14 @@
                 {
                   "name": "RESOURCE_TYPE",
                   "value": "[parameters('rpName')]"
+                },
+                                {
+                  "name": "LOG_REQUEST_BODY",
+                  "value": "true"
+                },
+                {
+                  "name": "LOG_RESPONSE_BODY",
+                  "value": "true"
                 }
               ],
               "command": "[if(parameters('debug'),json('[\"/cnabcustomrphandler\",\"--debug\"]'),json('[\"/cnabcustomrphandler\"]'))]",

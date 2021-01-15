@@ -19,6 +19,7 @@ import (
 
 var IsRPaaS bool
 var LogRequestBody bool
+var LogResponseBody bool
 
 var RequiredSettings = map[string]string{
 	"StorageAccountName":   "CNAB_AZURE_STATE_STORAGE_ACCOUNT_NAME",
@@ -32,6 +33,7 @@ var OptionalSettings = map[string]interface{}{
 	"AllowInsecureRegistry": "CNAB_BUNDLE_INSECURE_REGISTRY:bool",
 	"ForcePull":             "CNAB_BUNDLE_FORCE_PULL:bool",
 	"LogRequestBody":        "LOG_REQUEST_BODY:bool",
+	"LogResponseBody":       "LOG_RESPONSE_BODY:bool",
 	"IsRPaaS":               "IS_RPAAS:bool",
 	"ResourceType":          "RESOURCE_TYPE:string",
 	"BundleTag":             "CNAB_BUNDLE_TAG:string",
@@ -134,6 +136,7 @@ func Load() error {
 	}
 
 	LogRequestBody = OptionalSettings["LogRequestBody"].(bool)
+	LogResponseBody = OptionalSettings["LogResponseBody"].(bool)
 
 	return nil
 }

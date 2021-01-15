@@ -252,6 +252,10 @@
                   "value": "true"
                 },
                 {
+                  "name": "LOG_RESPONSE_BODY",
+                  "value": "true"
+                },
+                {
                   "name": "IS_RPAAS",
                   "value": "true"
                 }
