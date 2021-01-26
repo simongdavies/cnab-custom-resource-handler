@@ -158,7 +158,7 @@
                 },
                 {
                   "name": "API_KEY",
-                  "secureValue": "[parameters('apiKey')]"
+                  "value": "[parameters('apiKey')]"
                 }
               ],
               "command": [
@@ -248,16 +248,16 @@
                   "value": "[variables('aysncOpTableName')]"
                 },
                 {
-                  "name": "IS_RPAAS",
-                  "value": "true"
-                },
-                {
                   "name": "LOG_REQUEST_BODY",
                   "value": "true"
                 },
                 {
-                  "name": "CUSTOM_RP_TYPE",
-                  "value": "providers/cnab.sqlserver"
+                  "name": "LOG_RESPONSE_BODY",
+                  "value": "true"
+                },
+                {
+                  "name": "IS_RPAAS",
+                  "value": "true"
                 }
               ],
               "command": "[if(parameters('debug'),json('[\"/cnabcustomrphandler\",\"--debug\"]'),json('[\"/cnabcustomrphandler\"]'))]",

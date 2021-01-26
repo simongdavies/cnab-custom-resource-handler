@@ -36,48 +36,48 @@ func startPostJob() {
 	}
 }
 
-func postJob(data *PostJobData) {
+func postJob(jobData *PostJobData) {
 
-	log.Debugf("Started processing POST request for %s", data.RPInput.Id)
+	log.Debugf("Started processing POST request for %s", jobData.RPInput.Id)
 
 	//TODO Implement Timeouts
 	status := helpers.StatusFailed
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
 		responseError := fmt.Sprintf("error creating temp dir: %v", err)
-		updateStatus(data.RPInput, data.Action, status, data.OperationId, responseError)
+		updateStatus(jobData.RPInput, jobData.Action, status, jobData.OperationId, responseError)
 		return
 	}
 	defer os.RemoveAll(dir)
 
-	if len(data.RPInput.Properties.Parameters) > 0 {
-		paramFile, err := common.WriteParametersFile(data.RPInput.Properties.Parameters, dir)
+	if len(jobData.RPInput.Properties.Parameters) > 0 {
+		paramFile, err := common.WriteParametersFile(jobData.RPInput.Properties.BundleInformation.RPBundle, jobData.RPInput.Properties.Parameters, dir)
 		if err != nil {
-			updateStatus(data.RPInput, data.Action, status, data.OperationId, err.Error())
+			updateStatus(jobData.RPInput, jobData.Action, status, jobData.OperationId, err.Error())
 			return
 		}
-		data.Args = append(data.Args, "-p", paramFile.Name())
+		jobData.Args = append(jobData.Args, "-p", paramFile.Name())
 		defer os.Remove(paramFile.Name())
 	}
 
-	if len(data.RPInput.Properties.Credentials) > 0 {
-		credFile, err := common.WriteCredentialsFile(data.RPInput.Properties.Credentials, dir)
+	if len(jobData.RPInput.Properties.Credentials) > 0 {
+		credFile, err := common.WriteCredentialsFile(jobData.RPInput.Properties.BundleInformation.RPBundle, jobData.RPInput.Properties.Credentials, dir)
 		if err != nil {
-			updateStatus(data.RPInput, data.Action, status, data.OperationId, err.Error())
+			updateStatus(jobData.RPInput, jobData.Action, status, jobData.OperationId, err.Error())
 			return
 		}
-		data.Args = append(data.Args, "-c", credFile.Name())
+		jobData.Args = append(jobData.Args, "-c", credFile.Name())
 		defer os.Remove(credFile.Name())
 	}
-	data.Args = append(data.Args, "--tag", data.RPInput.Properties.Tag)
-	out, err := helpers.ExecutePorterCommand(data.Args)
+	jobData.Args = append(jobData.Args, "--tag", jobData.RPInput.Properties.BundleInformation.BundlePullOptions.Tag)
+	out, err := helpers.ExecutePorterCommand(jobData.Args)
 	if err == nil {
 		status = helpers.AsyncOperationComplete
 	}
 
-	updateStatus(data.RPInput, data.Action, status, data.OperationId, string(out))
+	updateStatus(jobData.RPInput, jobData.Action, status, jobData.OperationId, string(out))
 
-	log.Debugf("Finished processing POST request for %s", data.RPInput.Id)
+	log.Debugf("Finished processing POST request for %s", jobData.RPInput.Id)
 
 }
 

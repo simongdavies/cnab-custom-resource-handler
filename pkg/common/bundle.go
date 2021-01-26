@@ -1,7 +1,6 @@
 package common
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -10,46 +9,19 @@ import (
 	"strings"
 
 	"get.porter.sh/porter/pkg/parameters"
-	"get.porter.sh/porter/pkg/porter"
 
 	"github.com/cnabio/cnab-go/bundle"
 	"github.com/cnabio/cnab-go/credentials"
 	"github.com/cnabio/cnab-go/secrets/host"
 	"github.com/cnabio/cnab-go/valuesource"
-	"github.com/cnabio/cnab-to-oci/remotes"
-	"github.com/docker/cli/cli/config"
-	"github.com/docker/distribution/reference"
 	log "github.com/sirupsen/logrus"
 )
 
-var BundlePullOptions *porter.BundlePullOptions
-var TrimmedBundleTag string
-var RPBundle *bundle.Bundle
-
-func PullBundle() (*bundle.Bundle, error) {
-	ref, err := reference.ParseNormalizedNamed(BundlePullOptions.Tag)
-	if err != nil {
-		return nil, fmt.Errorf("Invalid bundle tag format %s, expected REGISTRY/name:tag %w", BundlePullOptions.Tag, err)
-	}
-
-	var insecureRegistries []string
-	if BundlePullOptions.InsecureRegistry {
-		reg := reference.Domain(ref)
-		insecureRegistries = append(insecureRegistries, reg)
-	}
-
-	bundle, _, err := remotes.Pull(context.Background(), ref, remotes.CreateResolver(config.LoadDefaultConfigFile(os.Stderr), insecureRegistries...))
-	if err != nil {
-		return nil, fmt.Errorf("Unable to pull remote bundle %w", err)
-	}
-	return bundle, nil
-}
-
-func WriteParametersFile(params map[string]interface{}, dir string) (*os.File, error) {
+func WriteParametersFile(rpBundle *bundle.Bundle, params map[string]interface{}, dir string) (*os.File, error) {
 
 	ps := parameters.NewParameterSet("parameter-set")
 	for k, v := range params {
-		vs, err := setupArg(k, v, len(RPBundle.Parameters[k].Destination.Path) > 0, dir)
+		vs, err := setupArg(k, v, len(rpBundle.Parameters[k].Destination.Path) > 0, dir)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to set up parameter: %v", err)
 		}
@@ -107,11 +79,11 @@ func setupArg(key string, value interface{}, isFile bool, dir string) (*valuesou
 	return &c, nil
 }
 
-func WriteCredentialsFile(creds map[string]interface{}, dir string) (*os.File, error) {
+func WriteCredentialsFile(rpBundle *bundle.Bundle, creds map[string]interface{}, dir string) (*os.File, error) {
 
 	cs := credentials.NewCredentialSet("credential-set")
 	for k, v := range creds {
-		vs, err := setupArg(k, v, len(RPBundle.Credentials[k].Path) > 0, dir)
+		vs, err := setupArg(k, v, len(rpBundle.Credentials[k].Path) > 0, dir)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to set up credential: %v", err)
 		}

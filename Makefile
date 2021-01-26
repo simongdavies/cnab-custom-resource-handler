@@ -30,6 +30,7 @@ endif
 GIT_TAG   := $(shell git describe --tags --always )
 VERSION   ?= ${GIT_TAG}
 LDFLAGS   += -X  github.com/$(ORG)/$(PROJECT)/pkg.Version=$(VERSION) -X github.com/$(ORG)/$(PROJECT)/pkg.Commit=$(COMMIT)
+RPAAS_GROUP =$(GROUP)_rpaas
 
 .PHONY: deploy
 deploy: publish
@@ -38,10 +39,10 @@ deploy: publish
 
 .PHONY: deploy-for-rpaas
 deploy-for-rpaas: publish
-	az group create -n  $(GROUP) -l $(LOCATION); \
+	az group create -n  $(RPAAS_GROUP) -l $(LOCATION); \
 	SSLKEY=$$(az keyvault secret show --name $(SSLKEY) --vault-name $(KV) --output tsv --query 'value'); \
 	SSLCERTFULLCHAIN=$$(az keyvault secret show --name $(SSLCERTFULLCHAIN) --vault-name $(KV) --output tsv --query 'value'); \
-	az deployment group create -g $(GROUP) --template-file deploy/azuredeployforrpaasnew.json --param customRPImage=$(IMAGE):$(VERSION)-$(COMMIT) --param debug=true --param bundleTag=$(BUNDLETAG) --param apiKey=$(APIKEY)  --param ssl-key=$$SSLKEY --param ssl-full-chain-crt=$$SSLCERTFULLCHAIN 
+	az deployment group create -g $(RPAAS_GROUP) --template-file deploy/azuredeployforrpaasnew.json --param customRPImage=$(IMAGE):$(VERSION)-$(COMMIT) --param debug=true --param bundleTag=$(BUNDLETAG) --param apiKey=$(APIKEY)  --param ssl-key=$$SSLKEY --param ssl-full-chain-crt=$$SSLCERTFULLCHAIN 
 
 .PHONY: default
 default: build

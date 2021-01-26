@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/Azure/go-autorest/autorest/azure"
-	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -36,8 +35,8 @@ func GetResourceDetails(r *http.Request) (*azure.Resource, *string, *string, err
 	log.Debugf("Resource Type: %s", resource.ResourceType)
 	return &resource, &resourceId, &requestPath, nil
 }
-func GetInstallationName(requestPath string) string {
-	data := []byte(fmt.Sprintf("%s%s", strings.ToLower(common.TrimmedBundleTag), strings.ToLower(requestPath)))
+func GetInstallationName(trimmedBundleTag string, requestPath string) string {
+	data := []byte(fmt.Sprintf("%s%s", strings.ToLower(trimmedBundleTag), strings.ToLower(requestPath)))
 	hash := sha256.Sum256(data)
 	return fmt.Sprintf("%x", hash)
 }

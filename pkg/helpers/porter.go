@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/simongdavies/cnab-custom-resource-handler/pkg/common"
+	"github.com/cnabio/cnab-go/bundle"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -43,7 +43,7 @@ func isOutputCommand(cmd string) bool {
 	return cmd == "installations"
 }
 
-func GetBundleOutput(installationName string, actions []string) ([]PorterOutput, error) {
+func GetBundleOutput(rpBundle *bundle.Bundle, installationName string, actions []string) ([]PorterOutput, error) {
 	var cmdOutput []PorterOutput
 	args := []string{}
 	args = append(args, "installations", "output", "list", "-i", installationName)
@@ -57,7 +57,7 @@ func GetBundleOutput(installationName string, actions []string) ([]PorterOutput,
 	}
 	var actionOuput []PorterOutput
 	for i, v := range cmdOutput {
-		if isOutputForAnyAction(common.RPBundle.Outputs[v.Name].ApplyTo, actions) {
+		if isOutputForAnyAction(rpBundle.Outputs[v.Name].ApplyTo, actions) {
 			actionOuput = append(actionOuput, cmdOutput[i])
 		}
 

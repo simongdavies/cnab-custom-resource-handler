@@ -34,63 +34,65 @@ func startPutJob() {
 	}
 }
 
-func putJob(data *PutJobData) {
+func putJob(jobData *PutJobData) {
 
-	log.Debugf("Started processing PUT request for %s", data.RPInput.Id)
+	log.Debugf("Started processing PUT request for %s", jobData.RPInput.Id)
 
 	//TODO Implement Timeouts
-	data.RPInput.Properties.ProvisioningState = helpers.ProvisioningStateFailed
+	jobData.RPInput.Properties.ProvisioningState = helpers.ProvisioningStateFailed
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
 		responseError := helpers.ErrorInternalServerErrorFromError(fmt.Errorf("error creating temp dir: %v", err))
-		if err := azure.SetFailedProvisioningState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
+		if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
 			log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 		}
 		return
 	}
 	defer os.RemoveAll(dir)
 
-	if len(data.RPInput.Properties.Parameters) > 0 {
-		paramFile, err := common.WriteParametersFile(data.RPInput.Properties.Parameters, dir)
+	if len(jobData.RPInput.Properties.Parameters) > 0 {
+		paramFile, err := common.WriteParametersFile(jobData.RPInput.Properties.BundleInformation.RPBundle, jobData.RPInput.Properties.Parameters, dir)
 		if err != nil {
 			responseError := helpers.ErrorInternalServerErrorFromError(err)
-			if err := azure.SetFailedProvisioningState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
+			if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
 				log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 			}
 			return
 		}
-		data.Args = append(data.Args, "-p", paramFile.Name())
+		jobData.Args = append(jobData.Args, "-p", paramFile.Name())
 		defer os.Remove(paramFile.Name())
 	}
 
-	if len(data.RPInput.Properties.Credentials) > 0 {
-		credFile, err := common.WriteCredentialsFile(data.RPInput.Properties.Credentials, dir)
+	if len(jobData.RPInput.Properties.Credentials) > 0 {
+		credFile, err := common.WriteCredentialsFile(jobData.RPInput.Properties.BundleInformation.RPBundle, jobData.RPInput.Properties.Credentials, dir)
 		if err != nil {
 			responseError := helpers.ErrorInternalServerErrorFromError(err)
-			if err := azure.SetFailedProvisioningState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
+			if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
 				log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 			}
 			return
 		}
-		data.Args = append(data.Args, "-c", credFile.Name())
+		jobData.Args = append(jobData.Args, "-c", credFile.Name())
 		defer os.Remove(credFile.Name())
 	}
 
-	if out, err := helpers.ExecutePorterCommand(data.Args); err != nil {
+	if out, err := helpers.ExecutePorterCommand(jobData.Args); err != nil {
+		log.Debugf("Execut Porter Command failed: %v", err)
 		responseError := helpers.ErrorInternalServerError(string(out))
-		if err := azure.SetFailedProvisioningState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
+		if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
 			log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 		}
 		return
 	}
-	data.RPInput.Properties.ProvisioningState = helpers.ProvisioningStateSucceeded
-	if err := azure.PutRPState(data.RPInput.SubscriptionId, data.RPInput.Id, data.RPInput.Properties); err != nil {
-		data.RPInput.Properties.ProvisioningState = helpers.ProvisioningStateFailed
+	log.Debugf("Porter Command for PUT request %s Succeeded", jobData.RPInput.Id)
+	jobData.RPInput.Properties.ProvisioningState = helpers.ProvisioningStateSucceeded
+	if err := azure.PutRPState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, jobData.RPInput.Properties); err != nil {
+		jobData.RPInput.Properties.ProvisioningState = helpers.ProvisioningStateFailed
 		responseError := helpers.ErrorInternalServerErrorFromError(fmt.Errorf("Failed to save RP state from put: %v", err))
-		if err := azure.SetFailedProvisioningState(data.RPInput.SubscriptionId, data.RPInput.Id, responseError); err != nil {
+		if err := azure.SetFailedProvisioningState(jobData.RPInput.SubscriptionId, jobData.RPInput.Id, responseError); err != nil {
 			log.Debugf("Failed to Merge RP State for response error %v: %v", responseError, err)
 		}
 	}
 
-	log.Debugf("Finished processing PUT request for %s", data.RPInput.Id)
+	log.Debugf("Finished processing PUT request for %s", jobData.RPInput.Id)
 }
