@@ -249,7 +249,7 @@
                   "name": "RESOURCE_TYPE",
                   "value": "[parameters('rpName')]"
                 },
-                                {
+                {
                   "name": "LOG_REQUEST_BODY",
                   "value": "true"
                 },

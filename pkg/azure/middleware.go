@@ -103,7 +103,10 @@ func ValidateRPType(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		payload := &models.BundleRP{
-			Properties: &models.BundleCommandProperties{},
+			Properties: &models.BundleCommandProperties{
+				Credentials: make(map[string]interface{}, 0),
+				Parameters:  make(map[string]interface{}, 0),
+			},
 		}
 		ctx := context.WithValue(r.Context(), models.BundleContext, payload)
 		requestPath := r.URL.Path

@@ -1,1 +1,1 @@
-default-storage-plugin = "azure.blob"
+default-storage-plugin = "azure.table"
