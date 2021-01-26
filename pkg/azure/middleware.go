@@ -23,6 +23,29 @@ type AzureLoginContextKey string
 
 const AzureLoginContext AzureLoginContextKey = "AzureLoginContext"
 
+type ResponseLogger struct {
+	w http.ResponseWriter
+}
+
+func NewResponseLogger(writer http.ResponseWriter) *ResponseLogger {
+	return &ResponseLogger{
+		w: writer,
+	}
+}
+
+func (r *ResponseLogger) Write(b []byte) (int, error) {
+	log.Debugf("Response Body:%s", string(b))
+	return r.w.Write(b)
+}
+
+func (r *ResponseLogger) Header() http.Header {
+	return r.w.Header()
+}
+
+func (r *ResponseLogger) WriteHeader(statusCode int) {
+	r.w.WriteHeader(statusCode)
+}
+
 // HTTP middleware setting original request URL on context
 func Login(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,14 +61,25 @@ func Login(next http.Handler) http.Handler {
 	})
 }
 
-func LogBody(next http.Handler) http.Handler {
+func LogResponseBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writer := w
+		if settings.LogResponseBody {
+			writer = NewResponseLogger(w)
+		}
+		next.ServeHTTP(writer, r)
+
+	})
+}
+
+func LogRequestBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if settings.LogRequestBody {
 			if body, err := ioutil.ReadAll(r.Body); err != nil {
-				log.Debug("Error Logging Request Payload:%w", err)
+				log.Debug("Error Logging Request Body:%w", err)
 			} else {
 				r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
-				log.Debugf("Request Payload:%s", string(body))
+				log.Debugf("Request Body:%s", string(body))
 			}
 		}
 		next.ServeHTTP(w, r)
