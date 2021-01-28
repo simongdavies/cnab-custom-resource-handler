@@ -193,6 +193,7 @@ func getRPOutput(rpBundle *bundle.Bundle, installationName string, rpInput *mode
 	var cmdOutput []helpers.PorterOutput
 	var err error
 
+	// TODO: get state from table storage (state sync needed)
 	if provisioningState == helpers.ProvisioningStateSucceeded {
 		cmdOutput, err = helpers.GetBundleOutput(rpBundle, installationName, []string{"install", "upgrade"})
 		if err != nil {

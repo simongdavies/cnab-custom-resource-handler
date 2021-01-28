@@ -4,3 +4,8 @@ mappings:
     tag: cnabquickstarts.azurecr.io/porter/sql-server-always-on-kubernetes-customui/bundle:0.3.0
     forcepull: true
     insecureregistry: false
+    provider: cnab.kubeflow
+    type: service
+    tag: cnabquickstarts.azurecr.io/porter/sql-server-always-on-kubernetes-customui/bundle:0.3.0
+    forcepull: true
+    insecureregistry: false
