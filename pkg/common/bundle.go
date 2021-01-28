@@ -3,6 +3,7 @@ package common
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -56,7 +57,7 @@ func setupArg(key string, value interface{}, isFile bool, dir string) (*valuesou
 	c := valuesource.Strategy{Name: key}
 
 	if isFile {
-		// File data should be encoded as base64
+		// TODO: File data should be encoded as base64 if it comes from ARM, inputs that come from outputs may not, need to deal with this properly
 		file, err := ioutil.TempFile(dir, "cnab*")
 		if err != nil {
 			return nil, fmt.Errorf("Failed to create temp file for %s :%v", key, err)
@@ -64,7 +65,12 @@ func setupArg(key string, value interface{}, isFile bool, dir string) (*valuesou
 		c.Source.Key = host.SourcePath
 		data, err := base64.StdEncoding.DecodeString(val)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to decode data for %s :%v", key, err)
+			// If data is not base64 encoded it came from an output
+			var inputError base64.CorruptInputError
+			if !errors.As(err, &inputError) {
+				return nil, fmt.Errorf("Failed to decode data for %s :%v", key, err)
+			}
+			data = []byte(val)
 		}
 		if _, err := file.Write(data); err != nil {
 			return nil, fmt.Errorf("Failed to write date to file for %s :%v", key, err)

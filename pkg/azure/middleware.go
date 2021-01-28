@@ -104,8 +104,8 @@ func ValidateRPType(next http.Handler) http.Handler {
 
 		payload := &models.BundleRP{
 			Properties: &models.BundleCommandProperties{
-				Credentials: make(map[string]interface{}, 0),
-				Parameters:  make(map[string]interface{}, 0),
+				Credentials: make(map[string]interface{}),
+				Parameters:  make(map[string]interface{}),
 			},
 		}
 		ctx := context.WithValue(r.Context(), models.BundleContext, payload)
@@ -217,6 +217,7 @@ func LoadState(next http.Handler) http.Handler {
 			payload.Properties.Parameters = properties.Parameters
 			payload.Properties.ErrorResponse = properties.ErrorResponse
 			payload.Properties.OperationId = properties.OperationId
+			// Need to exclude any porter injected outputs
 			installationName := helpers.GetInstallationName(payload.Properties.TrimmedBundleTag, *requestId)
 			outputs, err := helpers.GetBundleOutput(payload.Properties.BundleInformation.RPBundle, installationName, []string{"install", "upgrade"})
 			if err != nil {
@@ -226,7 +227,9 @@ func LoadState(next http.Handler) http.Handler {
 			for _, v := range outputs {
 				log.Debugf("Installation Name:%s Output:%s", installationName, v.Name)
 				if IsSenstive, _ := payload.Properties.BundleInformation.RPBundle.IsOutputSensitive(v.Name); !IsSenstive {
-					payload.Properties.Parameters[v.Name] = strings.TrimSuffix(v.Value, "\\n")
+					if _, outputIsParameter := payload.Properties.BundleInformation.RPBundle.Parameters[v.Name]; outputIsParameter {
+						payload.Properties.Parameters[v.Name] = strings.TrimSuffix(v.Value, "\\n")
+					}
 				}
 			}
 		}
