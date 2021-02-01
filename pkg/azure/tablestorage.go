@@ -158,6 +158,10 @@ func SetFailedProvisioningState(partitionKey string, resourceId string, errorRes
 		return fmt.Errorf("Failed to serialise ErrorResponse:%v", err)
 	}
 	p["ProvisioningState"] = helpers.ProvisioningStateFailed
+	// only write last 8k of error response
+	if len(errResp) > 8192 {
+		errResp = errResp[len(errResp)-8192:]
+	}
 	p["ErrorResponse"] = string(errResp)
 	row.Properties = p
 	guid := uuid.New().String()
