@@ -64,7 +64,7 @@ func deleteJob(jobData *DeleteJobData) {
 
 	jobData.RPInput.Properties = properties
 
-	jobData.Args = append(jobData.Args, "uninstall", jobData.InstallationName, "--delete", "--tag", jobData.BundleInfo.BundlePullOptions.Tag, "--force-delete")
+	jobData.Args = append(jobData.Args, "uninstall", jobData.InstallationName, "--delete", "--reference", jobData.BundleInfo.BundlePullOptions.Tag, "--force-delete")
 
 	if len(jobData.RPInput.Properties.Parameters) > 0 {
 		paramFile, err := common.WriteParametersFile(jobData.BundleInfo.RPBundle, jobData.RPInput.Properties.Parameters, dir)

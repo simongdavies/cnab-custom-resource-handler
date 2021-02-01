@@ -141,7 +141,7 @@ func putCustomResourceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var args []string
-	args = append(args, action, installationName, "--tag", rpInput.Properties.BundlePullOptions.Tag)
+	args = append(args, action, installationName, "--reference", rpInput.Properties.BundlePullOptions.Tag)
 
 	if len(rpInput.Properties.Parameters) > 0 {
 		if err := validateParameters(rpInput.Properties.BundleInformation.RPBundle, rpInput.Properties.Parameters, action); err != nil {
