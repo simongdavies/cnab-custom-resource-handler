@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/cnabio/cnab-go/bundle"
+	"github.com/simongdavies/cnab-custom-resource-handler/pkg/settings"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -22,7 +23,9 @@ func ExecutePorterCommand(args []string) ([]byte, error) {
 	env := os.Environ()
 	if isDriverCommand(args[0]) {
 		args = append(args, "--driver", "azure")
-		env = append(env, "CNAB_AZURE_DELETE_RESOURCES=false")
+		if settings.Debug {
+			env = append(env, "CNAB_AZURE_DELETE_RESOURCES=false")
+		}
 	}
 
 	if isOutputCommand(args[0]) {

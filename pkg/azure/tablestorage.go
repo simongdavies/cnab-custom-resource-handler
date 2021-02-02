@@ -1,6 +1,8 @@
 package azure
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -78,12 +80,23 @@ func GetRPState(partitionKey string, resourceId string) (*models.BundleCommandPr
 		}
 	}
 
-	if errorResponse, ok := row.Properties["ErrorResponse"].(string); ok {
-		err = json.Unmarshal([]byte(errorResponse), &properties.ErrorResponse)
+	if errorResponse, ok := row.Properties["ErrorResponse"].([]byte); ok {
+		// decompress error resp to avoid table storage size limit
+		byteReader := bytes.NewReader(errorResponse)
+		reader, err := gzip.NewReader(byteReader)
+		if err != nil {
+			return nil, err
+		}
+		var result []byte
+		if _, err = reader.Read(result); err != nil {
+			return nil, err
+		}
+		err = json.Unmarshal(result, &properties.ErrorResponse)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to de-serialise error response: %v", err)
 		}
 	}
+
 	properties.ProvisioningState = row.Properties["ProvisioningState"].(string)
 	if val, ok := row.Properties["OperationId"].(string); ok {
 		properties.OperationId = val
@@ -158,11 +171,19 @@ func SetFailedProvisioningState(partitionKey string, resourceId string, errorRes
 		return fmt.Errorf("Failed to serialise ErrorResponse:%v", err)
 	}
 	p["ProvisioningState"] = helpers.ProvisioningStateFailed
-	// only write last 8k of error response
-	if len(errResp) > 8192 {
-		errResp = errResp[len(errResp)-8192:]
+	// compress error resp to avoid table storage size limit
+	var buf bytes.Buffer
+	zw, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	if err != nil {
+		return err
 	}
-	p["ErrorResponse"] = string(errResp)
+	if _, err := zw.Write(errResp); err != nil {
+		return err
+	}
+	if err = zw.Close(); err != nil {
+		return err
+	}
+	p["ErrorResponse"] = buf.Bytes()
 	row.Properties = p
 	guid := uuid.New().String()
 	options := storage.EntityOptions{

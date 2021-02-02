@@ -25,9 +25,14 @@ var rootCmd = &cobra.Command{
 	Long:  `Launches a web server that provides ARM RPC compliant CRUD endpoints for a CNAB Bundle which can be used as an ARM Custom resource provider implementation for CNAB`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
+		logFormatter := new(log.TextFormatter)
+		logFormatter.TimestampFormat = "2006-01-02 15:04:05"
+		logFormatter.FullTimestamp = true
+		log.SetFormatter(logFormatter)
 		log.SetReportCaller(true)
 		if debug {
 			log.SetLevel(log.DebugLevel)
+			settings.Debug = true
 		}
 		log.Debugf("Commit:%s Version:%s", pkg.Commit, pkg.Version)
 		port, exists := os.LookupEnv("LISTENER_PORT")
