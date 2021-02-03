@@ -266,6 +266,10 @@ func validateParameters(rpBundle *bundle.Bundle, params map[string]interface{}, 
 
 	for k := range params {
 		if _, ok := rpBundle.Parameters[k]; !ok {
+			if strings.ToLower(k) == "namespace" {
+				log.Debugf("Ignoring additional parameter Name:%s", k)
+				return nil
+			}
 			log.Debugf("Parameter Name:%s Value not specified in bundle", k)
 			return fmt.Errorf("Parameter %s is not specified in bundle", k)
 		}
