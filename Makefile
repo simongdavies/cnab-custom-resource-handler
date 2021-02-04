@@ -42,7 +42,7 @@ deploy-for-rpaas: publish
 	az group create -n  $(RPAAS_GROUP) -l $(LOCATION); \
 	SSLKEY=$$(az keyvault secret show --name $(SSLKEY) --vault-name $(KV) --output tsv --query 'value'); \
 	SSLCERTFULLCHAIN=$$(az keyvault secret show --name $(SSLCERTFULLCHAIN) --vault-name $(KV) --output tsv --query 'value'); \
-	az deployment group create -g $(RPAAS_GROUP) --template-file deploy/azuredeployforrpaas.json --param customRPImage=$(IMAGE):$(VERSION)-$(COMMIT) --param debug=true --param bundleTag=$(BUNDLETAG) --param apiKey=$(APIKEY)  --param ssl-key=$$SSLKEY --param ssl-full-chain-crt=$$SSLCERTFULLCHAIN 
+	az deployment group create -g $(RPAAS_GROUP) --template-file deploy/azuredeployforrpaasnew.json --param customRPImage=$(IMAGE):$(VERSION)-$(COMMIT) --param debug=true --param bundleTag=$(BUNDLETAG) --param apiKey=$(APIKEY)  --param ssl-key=$$SSLKEY --param ssl-full-chain-crt=$$SSLCERTFULLCHAIN 
 
 .PHONY: default
 default: build
