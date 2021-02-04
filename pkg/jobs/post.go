@@ -69,7 +69,7 @@ func postJob(jobData *PostJobData) {
 		jobData.Args = append(jobData.Args, "-c", credFile.Name())
 		defer os.Remove(credFile.Name())
 	}
-	jobData.Args = append(jobData.Args, "--tag", jobData.RPInput.Properties.BundleInformation.BundlePullOptions.Tag)
+	jobData.Args = append(jobData.Args, "--reference", jobData.RPInput.Properties.BundleInformation.BundlePullOptions.Tag)
 	out, err := helpers.ExecutePorterCommand(jobData.Args)
 	if err == nil {
 		status = helpers.AsyncOperationComplete

@@ -6,6 +6,6 @@ mappings:
     insecureregistry: false
     provider: cnab.kubeflow
     type: service
-    tag: cnabquickstarts.azurecr.io/porter/sql-server-always-on-kubernetes-customui/bundle:0.3.0
+    tag: ghcr.io/squillace/aks-kubeflow-msi:v0.1.7
     forcepull: true
     insecureregistry: false

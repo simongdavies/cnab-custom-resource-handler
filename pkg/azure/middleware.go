@@ -221,14 +221,17 @@ func LoadState(next http.Handler) http.Handler {
 			installationName := helpers.GetInstallationName(payload.Properties.TrimmedBundleTag, *requestId)
 			outputs, err := helpers.GetBundleOutput(payload.Properties.BundleInformation.RPBundle, installationName, []string{"install", "upgrade"})
 			if err != nil {
-				_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("Failed to get bundle outputs is: %v", err)))
-				return
-			}
-			for _, v := range outputs {
-				log.Debugf("Installation Name:%s Output:%s", installationName, v.Name)
-				if IsSenstive, _ := payload.Properties.BundleInformation.RPBundle.IsOutputSensitive(v.Name); !IsSenstive {
-					if _, outputIsParameter := payload.Properties.BundleInformation.RPBundle.Parameters[v.Name]; outputIsParameter {
-						payload.Properties.Parameters[v.Name] = strings.TrimSuffix(v.Value, "\\n")
+				if payload.Properties.ProvisioningState != "" && !IsTerminalProvisioningState(payload.Properties.ProvisioningState) {
+					_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("Failed to get bundle outputs is: %v", err)))
+					return
+				}
+			} else {
+				for _, v := range outputs {
+					log.Debugf("Installation Name:%s Output:%s", installationName, v.Name)
+					if IsSenstive, _ := payload.Properties.BundleInformation.RPBundle.IsOutputSensitive(v.Name); !IsSenstive {
+						if _, outputIsParameter := payload.Properties.BundleInformation.RPBundle.Parameters[v.Name]; outputIsParameter {
+							payload.Properties.Parameters[v.Name] = strings.TrimSuffix(v.Value, "\\n")
+						}
 					}
 				}
 			}

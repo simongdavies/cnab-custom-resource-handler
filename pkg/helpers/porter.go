@@ -3,10 +3,12 @@ package helpers
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/cnabio/cnab-go/bundle"
+	"github.com/simongdavies/cnab-custom-resource-handler/pkg/settings"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -17,8 +19,13 @@ type PorterOutput struct {
 }
 
 func ExecutePorterCommand(args []string) ([]byte, error) {
+
+	env := os.Environ()
 	if isDriverCommand(args[0]) {
 		args = append(args, "--driver", "azure")
+		if settings.Debug {
+			env = append(env, "CNAB_AZURE_DELETE_RESOURCES=false")
+		}
 	}
 
 	if isOutputCommand(args[0]) {
@@ -26,7 +33,11 @@ func ExecutePorterCommand(args []string) ([]byte, error) {
 	}
 
 	log.Debugf("porter %v", args)
-	out, err := exec.Command("porter", args...).CombinedOutput()
+
+	cmd := exec.Command("porter", args...)
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	//out, err := exec.Command("porter", args...).CombinedOutput()
 	if err != nil {
 		log.Debugf("Command failed Error:%v Output: %s", err, string(out))
 		return out, fmt.Errorf("Porter command failed: %v", err)

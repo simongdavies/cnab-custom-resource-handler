@@ -20,6 +20,7 @@ import (
 var IsRPaaS bool
 var LogRequestBody bool
 var LogResponseBody bool
+var Debug bool
 
 var RequiredSettings = map[string]string{
 	"StorageAccountName":   "CNAB_AZURE_STATE_STORAGE_ACCOUNT_NAME",

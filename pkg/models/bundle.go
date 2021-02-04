@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/render"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/helpers"
 	"github.com/simongdavies/cnab-custom-resource-handler/pkg/settings"
+	log "github.com/sirupsen/logrus"
 )
 
 // ContextKey is the type used for the keys in the request context
@@ -56,11 +57,13 @@ func BundleCtx(next http.Handler) http.Handler {
 
 		if r.ContentLength != 0 {
 			if err := render.Bind(r, payload); err != nil {
+				log.Debugf("Error calling bind: %v", err)
 				_ = render.Render(w, r, helpers.ErrorInvalidRequestFromError(err))
 				return
 			}
 		} else {
 			if err := payload.setRequestProperties(r); err != nil {
+				log.Debugf("Error setting Request Properties: %v", err)
 				_ = render.Render(w, r, helpers.ErrorInvalidRequestFromError(err))
 				return
 			}

@@ -22,6 +22,12 @@ func WriteParametersFile(rpBundle *bundle.Bundle, params map[string]interface{},
 
 	ps := parameters.NewParameterSet("parameter-set")
 	for k, v := range params {
+		if strings.ToLower(k) == "namespace" {
+			if _, ok := rpBundle.Parameters[k]; !ok {
+				log.Debug("Ignoring missing namespace parameter")
+				continue
+			}
+		}
 		vs, err := setupArg(k, v, len(rpBundle.Parameters[k].Destination.Path) > 0, dir)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to set up parameter: %v", err)
