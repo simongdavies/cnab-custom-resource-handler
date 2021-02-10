@@ -133,8 +133,8 @@ func ValidateRPType(next http.Handler) http.Handler {
 			rpName := settings.GetRPName(resource.Provider, resource.ResourceType)
 			bundleInfo, ok = settings.RPToProvider[rpName]
 			if !ok || !strings.EqualFold(resource.Provider, bundleInfo.ResourceProvider) || !strings.EqualFold(resource.ResourceType, bundleInfo.ResourceType) {
-				log.Infof("request: %s not for registered Resource Provider %s Resource Type:%s", requestPath, bundleInfo.ResourceProvider, bundleInfo.ResourceType)
-				_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("request: %s not for registered Resource Provider %s Resource Type:%s", requestPath, bundleInfo.ResourceProvider, bundleInfo.ResourceType)))
+				log.Infof("request: %s not for registered Resource Provider: %s ", requestPath, rpName)
+				_ = render.Render(w, r, helpers.ErrorInternalServerError(fmt.Sprintf("request: %s not for registered Resource Provider: %s", requestPath, rpName)))
 				return
 			}
 		}

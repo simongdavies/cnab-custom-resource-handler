@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
@@ -81,16 +82,18 @@ func GetRPState(partitionKey string, resourceId string) (*models.BundleCommandPr
 	}
 
 	if errorResponse, ok := row.Properties["ErrorResponse"].([]byte); ok {
-		// decompress error resp to avoid table storage size limit
+		//  error resp is compressed to avoid table storage size limit
 		byteReader := bytes.NewReader(errorResponse)
 		reader, err := gzip.NewReader(byteReader)
 		if err != nil {
 			return nil, err
 		}
-		var result []byte
-		if _, err = reader.Read(result); err != nil {
+
+		result, err := ioutil.ReadAll(reader)
+		if err != nil {
 			return nil, err
 		}
+		log.Debugf("errorResponse:%s", string(result))
 		err = json.Unmarshal(result, &properties.ErrorResponse)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to de-serialise error response: %v", err)
